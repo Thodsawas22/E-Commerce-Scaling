@@ -493,7 +493,7 @@ body.light-mode .cost-row select:focus {
 
 .cost-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) 100px 76px 38px;
+  grid-template-columns: minmax(0, 1fr) 100px 110px 38px;
   gap: 8px;
 }
 
