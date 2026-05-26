@@ -204,9 +204,12 @@ function buildScenario(
   cpaCase: ScenarioInput,
   reinvestCase: ScenarioInput,
   adMode: "upfront" | "rolling",
-  dailyAdSpend: number,
+  initialDailyAdSpend: number,
   payoutCycleDays: number,
   maxRounds: number,
+  adScalingMode: "fixed" | "percent" | "targetDays",
+  adScalingPercent: number,
+  adScalingTargetDays: number,
 ): ScenarioResult {
   const costPerUnit = basePerUnitCost(inputs, extraCosts);
   const fixedCostPerMonth = monthlyFixedCost(inputs, extraCosts);
@@ -225,49 +228,74 @@ function buildScenario(
       : costPerUnit * clamp(markupCase.value, 0.1);
   
   const trueCostBeforeAds = costPerUnit + sellingPrice * pctFeeRate;
-  const cpa = cpaCase.customCpa && cpaCase.customCpa > 0 ? cpaCase.customCpa : sellingPrice * cpaRate;
-  const effectiveCpaRate = sellingPrice > 0 ? cpa / sellingPrice : 0;
+  const baseCpa = cpaCase.customCpa && cpaCase.customCpa > 0 ? cpaCase.customCpa : sellingPrice * cpaRate;
+  const breakEvenCpa = sellingPrice * (1 - refundRate) - trueCostBeforeAds;
   
-  const netRevenuePerUnit = sellingPrice * (1 - refundRate);
-  const grossProfitBeforeAds = netRevenuePerUnit - trueCostBeforeAds;
-  const breakEvenCpa = grossProfitBeforeAds;
-  const breakEvenRoas = grossProfitBeforeAds > 0 ? netRevenuePerUnit / grossProfitBeforeAds : 0;
-
-  const dailyOrders = cpa > 0 ? dailyAdSpend / cpa : 0;
-  const adFloatNeeded = adMode === "rolling" ? dailyAdSpend * payoutCycleDays : 0;
-  const monthlyAdBudget = dailyAdSpend * 30;
-  const adBudgetSavedVsMonthly = adMode === "rolling" ? monthlyAdBudget - adFloatNeeded : 0;
-
   let operatingCapital = clamp(inputs.startingCapital);
   const roadmap: RoundRow[] = [];
   let cumulativeDays = 0;
+  let totalAdSpend = 0;
 
   for (let round = 1; round <= maxRounds; round++) {
     const startingCapital = operatingCapital;
+    if (startingCapital <= 0) break;
+
+    // Calculate daily spend for this specific round
+    let currentDailyAdSpend = initialDailyAdSpend;
+    if (adMode === "rolling") {
+      if (adScalingMode === "percent") {
+        currentDailyAdSpend = initialDailyAdSpend * Math.pow(1 + adScalingPercent / 100, round - 1);
+      } else if (adScalingMode === "targetDays") {
+        // Analytical closed-form solution:
+        // currentDailyAdSpend = (Capital * CPA) / (TargetDays * CostPerUnit + PayoutDays * CPA)
+        const targetDays = Math.max(adScalingTargetDays, 1);
+        const payoutDays = Math.max(payoutCycleDays, 0);
+        const denom = targetDays * costPerUnit + payoutDays * baseCpa;
+        const calculatedSpend = denom > 0 ? (startingCapital * baseCpa) / denom : initialDailyAdSpend;
+        
+        // Safety bounds: keep at least at initial daily spend
+        currentDailyAdSpend = Math.max(initialDailyAdSpend, calculatedSpend);
+        
+        // Cap ad float at 70% of starting capital
+        const maxAllowedDailySpend = (startingCapital * 0.7) / Math.max(payoutDays, 1);
+        currentDailyAdSpend = Math.min(currentDailyAdSpend, maxAllowedDailySpend);
+      }
+    }
+
+    // Apply CPA fatigue decay based on budget
+    let cpaMultiplier = 1.0;
+    if (currentDailyAdSpend > 1500) {
+      const excess = currentDailyAdSpend - 1500;
+      cpaMultiplier = 1.0 + (excess / 1000) * 0.1;
+      if (cpaMultiplier > 1.5) cpaMultiplier = 1.5; // max 50% increase
+    }
+    const currentCpa = baseCpa * cpaMultiplier;
+    
     let adFloat = 0;
     let stockBudget = 0;
     let stockUnits = 0;
 
     if (adMode === "rolling") {
-      adFloat = adFloatNeeded;
+      adFloat = currentDailyAdSpend * payoutCycleDays;
       stockBudget = startingCapital - adFloat;
       if (stockBudget <= 0) break;
       stockUnits = Math.floor(stockBudget / Math.max(costPerUnit, 1));
     } else {
       // upfront mode
-      stockUnits = Math.floor(startingCapital / Math.max(costPerUnit + cpa, 1));
-      adFloat = stockUnits * cpa; // the budget locked for ads
+      stockUnits = Math.floor(startingCapital / Math.max(costPerUnit + currentCpa, 1));
+      adFloat = stockUnits * currentCpa;
       stockBudget = stockUnits * costPerUnit;
     }
 
     if (stockUnits <= 0) break;
 
-    const roundDays = stockUnits / Math.max(dailyOrders, 0.01);
+    const dailyOrders = currentCpa > 0 ? currentDailyAdSpend / currentCpa : 0;
+    const roundDays = dailyOrders > 0 ? stockUnits / dailyOrders : 999;
     cumulativeDays += roundDays;
 
     const totalRevenue = stockUnits * sellingPrice * (1 - refundRate);
     const totalStockCost = stockUnits * costPerUnit;
-    const totalAdSpendRound = adMode === "rolling" ? dailyAdSpend * roundDays : stockUnits * cpa;
+    const totalAdSpendRound = adMode === "rolling" ? currentDailyAdSpend * roundDays : stockUnits * currentCpa;
     const totalFees = stockUnits * sellingPrice * pctFeeRate;
     const totalFixedCost = fixedCostPerMonth * (roundDays / 30);
     const totalCost = totalStockCost + totalAdSpendRound + totalFees + totalFixedCost;
@@ -278,12 +306,28 @@ function buildScenario(
     const cashKept = Math.max(0, netProfit - reinvestedProfit);
     const nextCapital = Math.max(0, startingCapital + (netProfit >= 0 ? reinvestedProfit : netProfit));
 
+    totalAdSpend += totalAdSpendRound;
+
     roadmap.push({
-      round, startingCapital, adFloat, stockBudget, stockUnits,
-      dailyOrders, roundDays, totalRevenue, totalStockCost,
-      totalAdSpend: totalAdSpendRound, totalFees, totalFixedCost, totalCost,
-      netProfit, profitMargin, reinvestedProfit, cashKept,
-      nextCapital, cumulativeDays,
+      round,
+      startingCapital,
+      adFloat,
+      stockBudget,
+      stockUnits,
+      dailyOrders,
+      roundDays,
+      totalRevenue,
+      totalStockCost,
+      totalAdSpend: totalAdSpendRound,
+      totalFees,
+      totalFixedCost,
+      totalCost,
+      netProfit,
+      profitMargin,
+      reinvestedProfit,
+      cashKept,
+      nextCapital,
+      cumulativeDays,
     });
 
     operatingCapital = nextCapital;
@@ -291,12 +335,15 @@ function buildScenario(
 
   const cumulativeProfit = roadmap.reduce((sum, row) => sum + row.netProfit, 0);
   const totalRevenue = roadmap.reduce((sum, row) => sum + row.totalRevenue, 0);
-  const totalAdSpend = roadmap.reduce((sum, row) => sum + row.totalAdSpend, 0);
   const totalCashKept = roadmap.reduce((sum, row) => sum + row.cashKept, 0);
   const finalRound = roadmap[roadmap.length - 1];
   
   const netMargin = totalRevenue > 0 ? cumulativeProfit / totalRevenue : 0;
-  const cpaPressure = breakEvenCpa > 0 ? cpa / breakEvenCpa : 99;
+  const initialCpa = baseCpa;
+  const breakEvenRoas = trueCostBeforeAds > 0 ? sellingPrice * (1 - refundRate) / trueCostBeforeAds : 0;
+
+  // Risk estimation
+  const cpaPressure = breakEvenCpa > 0 ? initialCpa / breakEvenCpa : 99;
   const risk =
     breakEvenCpa <= 0 || cumulativeProfit <= 0 || (finalRound?.stockUnits ?? 0) === 0
       ? "danger"
@@ -304,25 +351,31 @@ function buildScenario(
         ? "caution"
         : "healthy";
 
+  // Estimates for initial round to populate metrics cards
+  const firstRound = roadmap[0];
+  const initialAdFloatNeeded = firstRound ? firstRound.adFloat : 0;
+  const monthlyAdBudget = initialDailyAdSpend * 30;
+  const adBudgetSavedVsMonthly = adMode === "rolling" ? monthlyAdBudget - initialAdFloatNeeded : 0;
+
   return {
     id: `${markupCase.label}-${cpaCase.label}-${reinvestCase.label}`,
     markupLabel: markupCase.label,
     markup: markupCase.value,
     sellingPrice,
     cpaLabel: cpaCase.label,
-    cpaRate: effectiveCpaRate,
-    cpa,
+    cpaRate: sellingPrice > 0 ? initialCpa / sellingPrice : 0,
+    cpa: initialCpa,
     reinvestLabel: reinvestCase.label,
     reinvestRate,
     trueCostBeforeAds,
-    grossProfitBeforeAds,
+    grossProfitBeforeAds: sellingPrice * (1 - refundRate) - trueCostBeforeAds,
     breakEvenCpa,
     breakEvenRoas,
-    initialCapitalUsed: roadmap[0] ? roadmap[0].totalCost : 0,
-    initialStockBudget: roadmap[0] ? roadmap[0].stockBudget : 0,
-    initialAdBudget: roadmap[0] ? roadmap[0].totalAdSpend : 0,
-    initialUnusedCapital: roadmap[0] ? roadmap[0].startingCapital - roadmap[0].adFloat - roadmap[0].stockBudget : 0,
-    startingUnits: roadmap[0]?.stockUnits ?? 0,
+    initialCapitalUsed: firstRound ? firstRound.totalCost : 0,
+    initialStockBudget: firstRound ? firstRound.stockBudget : 0,
+    initialAdBudget: firstRound ? firstRound.totalAdSpend : 0,
+    initialUnusedCapital: firstRound ? firstRound.startingCapital - firstRound.adFloat - firstRound.stockBudget : 0,
+    startingUnits: firstRound ? firstRound.stockUnits : 0,
     finalRoundUnits: finalRound?.stockUnits ?? 0,
     finalRoundProfit: finalRound?.netProfit ?? 0,
     cumulativeProfit,
@@ -330,7 +383,7 @@ function buildScenario(
     totalAdSpend,
     totalDays: cumulativeDays,
     totalCashKept,
-    adFloatNeeded,
+    adFloatNeeded: initialAdFloatNeeded,
     adBudgetSavedVsMonthly,
     risk,
     roadmap,
@@ -344,14 +397,21 @@ function buildAllScenarios(
   cpaCases: ScenarioInput[],
   reinvestCases: ScenarioInput[],
   adMode: "upfront" | "rolling",
-  dailyAdSpend: number,
+  initialDailyAdSpend: number,
   payoutCycleDays: number,
   maxRounds: number,
+  adScalingMode: "fixed" | "percent" | "targetDays",
+  adScalingPercent: number,
+  adScalingTargetDays: number,
 ) {
   return markups.flatMap((markup) =>
     cpaCases.flatMap((cpa) => 
       reinvestCases.map((reinvest) => 
-        buildScenario(inputs, extraCosts, markup, cpa, reinvest, adMode, dailyAdSpend, payoutCycleDays, maxRounds)
+        buildScenario(
+          inputs, extraCosts, markup, cpa, reinvest, adMode, 
+          initialDailyAdSpend, payoutCycleDays, maxRounds,
+          adScalingMode, adScalingPercent, adScalingTargetDays
+        )
       )
     ),
   );
@@ -547,6 +607,9 @@ export default function Home() {
   const [dailyAdSpend, setDailyAdSpend] = useState(1000);
   const [payoutCycleDays, setPayoutCycleDays] = useState(5);
   const [maxRounds, setMaxRounds] = useState(10);
+  const [adScalingMode, setAdScalingMode] = useState<"fixed" | "percent" | "targetDays">("fixed");
+  const [adScalingPercent, setAdScalingPercent] = useState(15);
+  const [adScalingTargetDays, setAdScalingTargetDays] = useState(18);
 
   const baseCost = basePerUnitCost(inputs, extraCosts);
   const effectiveMarkups = useMemo(() => {
@@ -595,8 +658,16 @@ export default function Home() {
   }, [customReinvest, reinvestCases]);
 
   const scenarios = useMemo(
-    () => buildAllScenarios(inputs, extraCosts, effectiveMarkups, effectiveCpaCases, effectiveReinvestCases, adMode, dailyAdSpend, payoutCycleDays, maxRounds),
-    [inputs, extraCosts, effectiveMarkups, effectiveCpaCases, effectiveReinvestCases, adMode, dailyAdSpend, payoutCycleDays, maxRounds],
+    () => buildAllScenarios(
+      inputs, extraCosts, effectiveMarkups, effectiveCpaCases, effectiveReinvestCases, 
+      adMode, dailyAdSpend, payoutCycleDays, maxRounds,
+      adScalingMode, adScalingPercent, adScalingTargetDays
+    ),
+    [
+      inputs, extraCosts, effectiveMarkups, effectiveCpaCases, effectiveReinvestCases, 
+      adMode, dailyAdSpend, payoutCycleDays, maxRounds,
+      adScalingMode, adScalingPercent, adScalingTargetDays
+    ],
   );
 
   const sortedScenarios = useMemo(
@@ -712,22 +783,46 @@ export default function Home() {
 
   return (
     <main className="app-shell">
-      <section className="hero">
-        <div>
-          <span className="eyebrow">Commerce Scale Planner</span>
-          <h1>วางแผนสเกลสินค้า E-commerce จากทุนจริง</h1>
-          <p>
-            ระบบจำลองแผนการเติบโตรายรอบ ตามโครงสร้างราคาทุนจริง, CPA และอัตราทบทุนสะสม
-          </p>
-        </div>
+      <div className="top-copyright-bar">
+        <span className="copyright-text">
+          Smart E-Commerce Simulation Engine • Developed by <strong>Dexter</strong>
+        </span>
         <button
-          className="theme-toggle-btn"
+          className="top-theme-toggle-btn"
           onClick={() => setIsLightMode(!isLightMode)}
           aria-label="Toggle theme"
           title={isLightMode ? "สลับเป็นโหมดกลางคืน" : "สลับเป็นโหมดกลางวัน"}
         >
-          {isLightMode ? <Moon size={20} /> : <Sun size={20} />}
+          {isLightMode ? <Moon size={15} /> : <Sun size={15} />}
+          <span style={{ fontSize: "0.78rem", fontWeight: 700 }}>{isLightMode ? "Dark Mode" : "Light Mode"}</span>
         </button>
+      </div>
+
+      <section className="hero">
+        <div className="hero-content">
+          <div className="logo-wrapper">
+            <svg className="hero-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#06b6d4" />
+                  <stop offset="50%" stopColor="#0d9488" />
+                  <stop offset="100%" stopColor="#3b82f6" />
+                </linearGradient>
+                <filter id="logo-glow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="6" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+              </defs>
+              <rect x="15" y="15" width="70" height="70" rx="18" stroke="url(#logo-grad)" strokeWidth="6" strokeDasharray="3 3" />
+              <path d="M 35,30 L 35,70 L 50,70 C 62,70 68,60 68,50 C 68,40 62,30 50,30 Z" fill="none" stroke="url(#logo-grad)" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" filter="url(#logo-glow)" filter-glow="true" />
+              <path d="M 46,42 L 54,50 L 46,58" fill="none" stroke="#ffffff" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <h1 className="brand-title">Smart E-Commerce<br />Simulation Engine</h1>
+          <p className="brand-slogan">
+            เจาะลึกกระแสเงินสดและสเกลยอดขายด้วยแบบจำลองอัจฉริยะ: วางแผนการเติบโตรายรอบ ตามโครงสร้างทุนจริง, CPA และวงจรกระแสเงินสด
+          </p>
+        </div>
       </section>
 
       <section className="workspace">
@@ -940,7 +1035,7 @@ export default function Home() {
                     <div className="rolling-settings-grid">
                       <div className="rolling-input-wrap">
                         <label>
-                          <span>งบแอดต่อวัน (Daily Ad Spend)</span>
+                          <span>งบแอดวันแรก (Initial Daily Ad Spend)</span>
                           <div className="custom-input-wrapper">
                             <span className="input-prefix">฿</span>
                             <input
@@ -972,12 +1067,92 @@ export default function Home() {
                         </label>
                       </div>
                     </div>
-                    <div className="rolling-insight-bar">
+
+                    <div className="scaling-mode-wrap" style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px dashed rgba(255,255,255,0.08)" }}>
+                      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "10px" }}>
+                        รูปแบบการขยับงบแอดรายรอบ (Daily Ad Spend Scaling)
+                      </span>
+                      <div className="scaling-segment-group">
+                        <button
+                          type="button"
+                          className={`scaling-segment-btn ${adScalingMode === "fixed" ? "active" : ""}`}
+                          onClick={() => setAdScalingMode("fixed")}
+                        >
+                          งบคงที่ (Fixed)
+                        </button>
+                        <button
+                          type="button"
+                          className={`scaling-segment-btn ${adScalingMode === "percent" ? "active" : ""}`}
+                          onClick={() => setAdScalingMode("percent")}
+                        >
+                          เพิ่ม % รายรอบ
+                        </button>
+                        <button
+                          type="button"
+                          className={`scaling-segment-btn ${adScalingMode === "targetDays" ? "active" : ""}`}
+                          onClick={() => setAdScalingMode("targetDays")}
+                        >
+                          คุมวันหมดคลัง (Auto)
+                        </button>
+                      </div>
+                    </div>
+
+                    {adScalingMode === "percent" && (
+                      <div className="rolling-settings-grid" style={{ marginTop: "16px", animation: "fadeIn 0.3s ease" }}>
+                        <div className="rolling-input-wrap" style={{ gridColumn: "span 2" }}>
+                          <label>
+                            <span>อัตราเติบโตงบแอดต่อรอบ (Growth Rate)</span>
+                            <div className="custom-input-wrapper">
+                              <input
+                                type="number"
+                                value={adScalingPercent === 0 ? "" : adScalingPercent}
+                                placeholder="15"
+                                onChange={(e) => setAdScalingPercent(clamp(Number(e.target.value)))}
+                              />
+                              <span className="input-suffix">% / รอบ</span>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {adScalingMode === "targetDays" && (
+                      <div className="rolling-settings-grid" style={{ marginTop: "16px", animation: "fadeIn 0.3s ease" }}>
+                        <div className="rolling-input-wrap" style={{ gridColumn: "span 2" }}>
+                          <label>
+                            <span>เป้าหมายจำนวนวันขายสต็อกหมด (Target Sell-out Days)</span>
+                            <div className="custom-input-wrapper">
+                              <input
+                                type="number"
+                                value={adScalingTargetDays === 0 ? "" : adScalingTargetDays}
+                                placeholder="18"
+                                onChange={(e) => setAdScalingTargetDays(clamp(Number(e.target.value)))}
+                              />
+                              <span className="input-suffix">วัน / รอบสต็อก</span>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="rolling-insight-bar" style={{ marginTop: "20px" }}>
                       <div className="daily-insight-icon">💡</div>
                       <div className="daily-insight-body">
-                        <span>
-                          เงินลอยตัว Ad Float = <strong>฿{number.format(dailyAdSpend * payoutCycleDays)}</strong> (กันไว้หมุน {payoutCycleDays} วัน)
-                        </span>
+                        {adScalingMode === "fixed" && (
+                          <span>
+                            เงินลอยตัว Ad Float = <strong>฿{number.format(dailyAdSpend * payoutCycleDays)}</strong> (กันไว้หมุน {payoutCycleDays} วัน)
+                          </span>
+                        )}
+                        {adScalingMode === "percent" && (
+                          <span>
+                            เงินลอยตัวรอบแรก = <strong>฿{number.format(dailyAdSpend * payoutCycleDays)}</strong> (งบแอดสเกลรอบถัดไปทบละ <strong>+{adScalingPercent}%</strong> เพื่อเร่งความเร็วการระบายสต็อกล็อตที่ใหญ่ขึ้น)
+                          </span>
+                        )}
+                        {adScalingMode === "targetDays" && (
+                          <span>
+                            เป้าประคองหมดใน <strong>{adScalingTargetDays} วัน</strong> (ระบบสเกลแอดอัตโนมัติอ้างอิงตามสต็อกจริง โดยแอดลอยตัวรอบแรกคือ <strong>฿{number.format(dailyAdSpend * payoutCycleDays)}</strong> เพื่อรักษาความเร็วทบเงินคงที่)
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1156,6 +1331,11 @@ export default function Home() {
           )}
         </section>
       </section>
+      <footer className="bottom-copyright-bar">
+        <div className="bottom-bar-content">
+          <span>© 2026 Dexter Nexus • All rights reserved • Designed & Developed by <strong>Dexter</strong></span>
+        </div>
+      </footer>
     </main>
   );
 }
