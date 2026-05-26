@@ -457,8 +457,13 @@ function MultiScenarioLineChart({ scenarios }: { scenarios: ScenarioResult[] }) 
 }
 
 function RiskPill({ risk }: { risk: ScenarioResult["risk"] }) {
-  const label = risk === "healthy" ? "น่าเดินต่อ" : risk === "caution" ? "ต้องคุมตัวเลข" : "เสี่ยง";
-  return <span className={`risk ${risk}`}>{label}</span>;
+  const label = risk === "healthy" ? "น่าเดินต่อ" : risk === "caution" ? "ต้องคุมตัวเลข" : "เสี่ยงสูง";
+  return (
+    <span className={`risk ${risk}`}>
+      <span className="pulse-dot" />
+      {label}
+    </span>
+  );
 }
 
 export default function Home() {
@@ -821,37 +826,54 @@ export default function Home() {
                     <thead>
                       <tr className="group-row">
                         <th className="plan-head" colSpan={2}>แผน</th>
-                        <th className="cost-head" colSpan={3}>ต้นทุน</th>
+                        <th className="cost-head" colSpan={2}>ต้นทุน</th>
                         <th className="quantity-head" colSpan={1}>จำนวนขาย</th>
                         <th className="sales-head" colSpan={1}>ยอดขาย</th>
-                        <th className="profit-head" colSpan={3}>กำไร / เงินสด</th>
+                        <th className="profit-head" colSpan={2}>กำไร / เงินสด</th>
                       </tr>
                       <tr>
                         <th className="plan-head">เดือน</th>
                         <th className="plan-head">เงินต้น</th>
-                        <th className="cost-head">ค่า stock/ops</th>
-                        <th className="cost-head">Ad spend</th>
-                        <th className="cost-head">เงินลงทุน</th>
+                        <th className="cost-head">ค่าของ & ค่าแอด</th>
+                        <th className="cost-head">เงินลงทุนรวม</th>
                         <th className="quantity-head">ขายได้</th>
                         <th className="sales-head">รายได้สุทธิ</th>
                         <th className="profit-head">กำไรสุทธิ</th>
-                        <th className="profit-head">เก็บเงิน</th>
-                        <th className="profit-head">Reinvest</th>
+                        <th className="profit-head">การปันส่วน (เก็บ / ทบ)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedScenario.roadmap.map((row) => (
                         <tr key={row.month}>
-                          <td className="plan-col">M{row.month}</td>
-                          <td className="plan-col">{currency(row.startingCapital)}</td>
-                          <td className="cost-col">{currency(row.variableCost)}</td>
-                          <td className="cost-col">{currency(row.adSpend)}</td>
-                          <td className="cost-col">{currency(row.requiredCapital)}</td>
-                          <td className="quantity-col">{whole(row.units)} ชิ้น</td>
-                          <td className="sales-col">{currency(row.revenue)}</td>
-                          <td className={`profit-col ${row.netProfit >= 0 ? "positive" : "negative"}`}>{currency(row.netProfit)}</td>
-                          <td className="profit-col">{currency(row.cashKept)}</td>
-                          <td className="profit-col">{currency(row.reinvestedProfit)}</td>
+                          <td className="plan-col stacked-cell">
+                            <div>M{row.month}</div>
+                          </td>
+                          <td className="plan-col stacked-cell">
+                            <div>{currency(row.startingCapital)}</div>
+                          </td>
+                          <td className="cost-col stacked-cell">
+                            <div>{currency(row.variableCost)}</div>
+                            <div>ค่าแอด {currency(row.adSpend)}</div>
+                          </td>
+                          <td className="cost-col stacked-cell">
+                            <div>{currency(row.requiredCapital)}</div>
+                            <div>เหลือทบ {currency(row.unusedCapital)}</div>
+                          </td>
+                          <td className="quantity-col stacked-cell">
+                            <div>{whole(row.units)} ชิ้น</div>
+                          </td>
+                          <td className="sales-col stacked-cell">
+                            <div>{currency(row.revenue)}</div>
+                          </td>
+                          <td className="profit-col stacked-cell">
+                            <span className={`profit-pill ${row.netProfit >= 0 ? "positive" : "negative"}`}>
+                              {currency(row.netProfit)}
+                            </span>
+                          </td>
+                          <td className="profit-col stacked-cell">
+                            <div>เก็บ {currency(row.cashKept)}</div>
+                            <div>ทบ {currency(row.reinvestedProfit)}</div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -996,7 +1018,7 @@ function PriceControlCard({
         </div>
       </div>
       <div className="selector-insight">
-        <span>ราคาขายขั้นต่ำ</span>
+        <span>ราคาขายขั้นต่ำ (Break-Even)</span>
         <strong>{currency(minimumSellingPrice)}</strong>
         <small>ต่ำกว่านี้กำไรต่อออเดอร์เริ่มติดลบ</small>
       </div>
@@ -1013,14 +1035,13 @@ function PriceControlCard({
             >
                 <span>{markup.label}</span>
                 <strong>{currency(defaultPrice)}</strong>
-                <small>{markup.customPrice ? "custom" : `ต้นทุน x ${markup.value}`}</small>
             </button>
           );
         })}
         </div>
         <div className="custom-input-card">
           <label>
-            <span>ราคาขายเอง</span>
+            <span>ราคาขายเอง (บาท)</span>
             <input
               type="number"
               value={customSellingPrice ?? ""}
@@ -1030,7 +1051,6 @@ function PriceControlCard({
               }
             />
           </label>
-          <small>เพิ่มเป็นปุ่มราคาด้านซ้ายและคำนวณใน chart</small>
         </div>
       </div>
     </div>
@@ -1058,14 +1078,14 @@ function CpaControlCard({
     <div className="selector-card">
       <div className="card-title compact">
         <div>
-          <h2>เลือก CPA</h2>
-          <p>แยก CPA ออกจากราคาขาย เพื่อดูผลของ Bad / Base / Good หรือใส่ CPA เอง</p>
+          <h2>เลือก CPA (ค่าแอดเฉลี่ยต่อออเดอร์)</h2>
+          <p>เลือก CPA เพื่อดูผลลัพธ์ของแต่ละระดับความยากง่าย</p>
         </div>
       </div>
       <div className="selector-insight">
-        <span>CPA limit</span>
+        <span>CPA Limit สูงสุด</span>
         <strong>{currency(cpaLimit)}</strong>
-        <small>CPA สูงสุดก่อนกำไรต่อออเดอร์ติดลบ</small>
+        <small>CPA ห้ามสูงเกินค่านี้เพื่อหลีกเลี่ยงการขาดทุนต่อออเดอร์</small>
       </div>
       <div className="selector-row">
         <div className="choice-buttons">
@@ -1074,6 +1094,9 @@ function CpaControlCard({
               cpaCase.customCpa && cpaCase.customCpa > 0
                 ? cpaCase.customCpa
                 : selectedSellingPrice * (clamp(cpaCase.value) / 100);
+            
+            const riskPct = cpaLimit > 0 ? Math.min(100, Math.max(0, (cpaValue / cpaLimit) * 100)) : 100;
+            const meterColor = riskPct > 85 ? "var(--red)" : riskPct > 60 ? "var(--amber)" : "var(--green)";
 
             return (
               <button
@@ -1083,14 +1106,19 @@ function CpaControlCard({
               >
                 <span>{cpaCase.label}</span>
                 <strong>{currency(cpaValue)}</strong>
-                <small>{cpaCase.customCpa ? "custom CPA" : `${percent(cpaCase.value)} ของราคาขาย`}</small>
+                <div className="cpa-meter-wrapper">
+                  <div className="cpa-meter-bg">
+                    <div className="cpa-meter-fill" style={{ width: `${riskPct}%`, backgroundColor: meterColor }} />
+                  </div>
+                  <small style={{ color: meterColor, fontWeight: 700 }}>{riskPct.toFixed(0)}% ของ Limit</small>
+                </div>
               </button>
             );
           })}
         </div>
         <div className="custom-input-card">
           <label>
-            <span>CPA เอง</span>
+            <span>CPA กำหนดเอง (บาท)</span>
             <input
               type="number"
               value={customCpa ?? ""}
@@ -1098,7 +1126,6 @@ function CpaControlCard({
               onChange={(event) => onCustomCpaChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))}
             />
           </label>
-          <small>ใส่เป็นบาทต่อ purchase</small>
         </div>
       </div>
     </div>
@@ -1122,27 +1149,32 @@ function ReinvestControlCard({
     <div className="selector-card">
       <div className="card-title compact">
         <div>
-          <h2>เลือก % reinvest</h2>
-          <p>เลือกสัดส่วนกำไรที่นำกลับไปซื้อ stock และยิงแอดต่อในเดือนถัดไป</p>
+          <h2>เลือก % Reinvest (การทบทุนสะสม)</h2>
+          <p>เลือกสัดส่วนการนำกำไรสุทธิไปลงทุนเพิ่มในรอบเดือนถัดไป</p>
         </div>
       </div>
       <div className="selector-row">
         <div className="choice-buttons">
-          {reinvestCases.map((reinvestCase, index) => (
-            <button
-              className={`choice-button ${selectedReinvestLabel === reinvestCase.label ? "active" : ""}`}
-              key={`${reinvestCase.label}-${index}`}
-              onClick={() => onSelectReinvest(reinvestCase.label)}
-            >
-              <span>{reinvestCase.label}</span>
-              <strong>{percent(reinvestCase.customReinvest ?? reinvestCase.value)}</strong>
-              <small>{reinvestCase.customReinvest ? "custom reinvest" : "ของกำไรสุทธิ"}</small>
-            </button>
-          ))}
+          {reinvestCases.map((reinvestCase, index) => {
+            const rateVal = reinvestCase.customReinvest ?? reinvestCase.value;
+            const strategy = rateVal <= 35 ? "เน้นเก็บเงินสดเร็ว" : rateVal <= 55 ? "การเติบโตสมดุล" : "เน้นเร่งสเกลโตไว";
+            
+            return (
+              <button
+                className={`choice-button ${selectedReinvestLabel === reinvestCase.label ? "active" : ""}`}
+                key={`${reinvestCase.label}-${index}`}
+                onClick={() => onSelectReinvest(reinvestCase.label)}
+              >
+                <span>{reinvestCase.label}</span>
+                <strong>{percent(rateVal)}</strong>
+                <small style={{ marginTop: "2px", opacity: 0.85 }}>{strategy}</small>
+              </button>
+            );
+          })}
         </div>
         <div className="custom-input-card">
           <label>
-            <span>Reinvest เอง</span>
+            <span>Reinvest เอง (%)</span>
             <input
               type="number"
               value={customReinvest ?? ""}
@@ -1152,7 +1184,6 @@ function ReinvestControlCard({
               }
             />
           </label>
-          <small>ใส่เป็น % ของกำไรสุทธิที่เอาไป compound</small>
         </div>
       </div>
     </div>
