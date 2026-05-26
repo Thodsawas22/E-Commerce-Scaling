@@ -47,23 +47,26 @@ type ScenarioInput = {
   customReinvest?: number;
 };
 
-type MonthlyRow = {
-  month: number;
+type RoundRow = {
+  round: number;
   startingCapital: number;
-  units: number;
-  revenue: number;
-  variableCost: number;
-  adSpend: number;
-  requiredCapital: number;
-  unusedCapital: number;
-  fixedCost: number;
+  adFloat: number;
+  stockBudget: number;
+  stockUnits: number;
+  dailyOrders: number;
+  roundDays: number;
+  totalRevenue: number;
+  totalStockCost: number;
+  totalAdSpend: number;
+  totalFees: number;
+  totalFixedCost: number;
+  totalCost: number;
   netProfit: number;
-  cashKept: number;
+  profitMargin: number;
   reinvestedProfit: number;
+  cashKept: number;
   nextCapital: number;
-  nextUnits: number;
-  roas: number;
-  mer: number;
+  cumulativeDays: number;
 };
 
 type ScenarioResult = {
@@ -85,13 +88,17 @@ type ScenarioResult = {
   initialAdBudget: number;
   initialUnusedCapital: number;
   startingUnits: number;
-  month12Units: number;
-  month12Profit: number;
+  finalRoundUnits: number;
+  finalRoundProfit: number;
   cumulativeProfit: number;
   totalRevenue: number;
   totalAdSpend: number;
+  totalDays: number;
+  totalCashKept: number;
+  adFloatNeeded: number;
+  adBudgetSavedVsMonthly: number;
   risk: "healthy" | "caution" | "danger";
-  roadmap: MonthlyRow[];
+  roadmap: RoundRow[];
 };
 
 const defaultInputs: Inputs = {
@@ -196,75 +203,102 @@ function buildScenario(
   markupCase: ScenarioInput,
   cpaCase: ScenarioInput,
   reinvestCase: ScenarioInput,
+  adMode: "upfront" | "rolling",
+  dailyAdSpend: number,
+  payoutCycleDays: number,
+  maxRounds: number,
 ): ScenarioResult {
-  const baseCost = basePerUnitCost(inputs, extraCosts);
-  const fixedCost = monthlyFixedCost(inputs, extraCosts);
+  const costPerUnit = basePerUnitCost(inputs, extraCosts);
+  const fixedCostPerMonth = monthlyFixedCost(inputs, extraCosts);
+  const pctFeeRate = percentCostRate(inputs, extraCosts);
   const refundRate = clamp(inputs.refundRate) / 100;
+
   const cpaRate = clamp(cpaCase.value) / 100;
   const reinvestRate =
     reinvestCase.customReinvest && reinvestCase.customReinvest > 0
       ? clamp(reinvestCase.customReinvest) / 100
       : clamp(reinvestCase.value) / 100;
+  
   const sellingPrice =
     markupCase.customPrice && markupCase.customPrice > 0
       ? markupCase.customPrice
-      : baseCost * clamp(markupCase.value, 0.1);
-  const trueCostBeforeAds = baseCost + sellingPrice * percentCostRate(inputs, extraCosts);
+      : costPerUnit * clamp(markupCase.value, 0.1);
+  
+  const trueCostBeforeAds = costPerUnit + sellingPrice * pctFeeRate;
   const cpa = cpaCase.customCpa && cpaCase.customCpa > 0 ? cpaCase.customCpa : sellingPrice * cpaRate;
   const effectiveCpaRate = sellingPrice > 0 ? cpa / sellingPrice : 0;
+  
   const netRevenuePerUnit = sellingPrice * (1 - refundRate);
   const grossProfitBeforeAds = netRevenuePerUnit - trueCostBeforeAds;
   const breakEvenCpa = grossProfitBeforeAds;
   const breakEvenRoas = grossProfitBeforeAds > 0 ? netRevenuePerUnit / grossProfitBeforeAds : 0;
-  const perUnitOperatingCapital = trueCostBeforeAds + cpa;
-  let operatingCapital = clamp(inputs.startingCapital);
-  const roadmap: MonthlyRow[] = [];
 
-  for (let month = 1; month <= 12; month += 1) {
+  const dailyOrders = cpa > 0 ? dailyAdSpend / cpa : 0;
+  const adFloatNeeded = adMode === "rolling" ? dailyAdSpend * payoutCycleDays : 0;
+  const monthlyAdBudget = dailyAdSpend * 30;
+  const adBudgetSavedVsMonthly = adMode === "rolling" ? monthlyAdBudget - adFloatNeeded : 0;
+
+  let operatingCapital = clamp(inputs.startingCapital);
+  const roadmap: RoundRow[] = [];
+  let cumulativeDays = 0;
+
+  for (let round = 1; round <= maxRounds; round++) {
     const startingCapital = operatingCapital;
-    const units = Math.floor(startingCapital / Math.max(perUnitOperatingCapital, 1));
-    const revenue = units * sellingPrice * (1 - refundRate);
-    const variableCost = units * trueCostBeforeAds;
-    const adSpend = units * cpa;
-    const requiredCapital = variableCost + adSpend;
-    const unusedCapital = Math.max(0, startingCapital - requiredCapital);
-    const netProfit = revenue - variableCost - adSpend - fixedCost;
+    let adFloat = 0;
+    let stockBudget = 0;
+    let stockUnits = 0;
+
+    if (adMode === "rolling") {
+      adFloat = adFloatNeeded;
+      stockBudget = startingCapital - adFloat;
+      if (stockBudget <= 0) break;
+      stockUnits = Math.floor(stockBudget / Math.max(costPerUnit, 1));
+    } else {
+      // upfront mode
+      stockUnits = Math.floor(startingCapital / Math.max(costPerUnit + cpa, 1));
+      adFloat = stockUnits * cpa; // the budget locked for ads
+      stockBudget = stockUnits * costPerUnit;
+    }
+
+    if (stockUnits <= 0) break;
+
+    const roundDays = stockUnits / Math.max(dailyOrders, 0.01);
+    cumulativeDays += roundDays;
+
+    const totalRevenue = stockUnits * sellingPrice * (1 - refundRate);
+    const totalStockCost = stockUnits * costPerUnit;
+    const totalAdSpendRound = adMode === "rolling" ? dailyAdSpend * roundDays : stockUnits * cpa;
+    const totalFees = stockUnits * sellingPrice * pctFeeRate;
+    const totalFixedCost = fixedCostPerMonth * (roundDays / 30);
+    const totalCost = totalStockCost + totalAdSpendRound + totalFees + totalFixedCost;
+    
+    const netProfit = totalRevenue - totalCost;
+    const profitMargin = totalRevenue > 0 ? netProfit / totalRevenue : 0;
     const reinvestedProfit = Math.max(0, netProfit * reinvestRate);
     const cashKept = Math.max(0, netProfit - reinvestedProfit);
     const nextCapital = Math.max(0, startingCapital + (netProfit >= 0 ? reinvestedProfit : netProfit));
-    const nextUnitsRaw = Math.floor(nextCapital / Math.max(perUnitOperatingCapital, 1));
-    const nextUnits = Math.max(0, nextUnitsRaw);
 
     roadmap.push({
-      month,
-      startingCapital,
-      units,
-      revenue,
-      variableCost,
-      adSpend,
-      requiredCapital,
-      unusedCapital,
-      fixedCost,
-      netProfit,
-      cashKept,
-      reinvestedProfit,
-      nextCapital,
-      nextUnits,
-      roas: adSpend > 0 ? revenue / adSpend : 0,
-      mer: revenue > 0 ? adSpend / revenue : 0,
+      round, startingCapital, adFloat, stockBudget, stockUnits,
+      dailyOrders, roundDays, totalRevenue, totalStockCost,
+      totalAdSpend: totalAdSpendRound, totalFees, totalFixedCost, totalCost,
+      netProfit, profitMargin, reinvestedProfit, cashKept,
+      nextCapital, cumulativeDays,
     });
 
     operatingCapital = nextCapital;
   }
 
   const cumulativeProfit = roadmap.reduce((sum, row) => sum + row.netProfit, 0);
-  const totalRevenue = roadmap.reduce((sum, row) => sum + row.revenue, 0);
-  const totalAdSpend = roadmap.reduce((sum, row) => sum + row.adSpend, 0);
-  const month12 = roadmap[11];
+  const totalRevenue = roadmap.reduce((sum, row) => sum + row.totalRevenue, 0);
+  const totalAdSpend = roadmap.reduce((sum, row) => sum + row.totalAdSpend, 0);
+  const totalCashKept = roadmap.reduce((sum, row) => sum + row.cashKept, 0);
+  const finalRound = roadmap[roadmap.length - 1];
+  
   const netMargin = totalRevenue > 0 ? cumulativeProfit / totalRevenue : 0;
   const cpaPressure = breakEvenCpa > 0 ? cpa / breakEvenCpa : 99;
   const risk =
-    breakEvenCpa <= 0 || cumulativeProfit <= 0 || month12.units === 0
+    breakEvenCpa <= 0 || cumulativeProfit <= 0 || (finalRound?.stockUnits ?? 0) === 0
       ? "danger"
       : cpaPressure > 0.8 || netMargin < 0.12
         ? "caution"
@@ -284,16 +318,20 @@ function buildScenario(
     grossProfitBeforeAds,
     breakEvenCpa,
     breakEvenRoas,
-    initialCapitalUsed: roadmap[0]?.requiredCapital ?? 0,
-    initialStockBudget: roadmap[0]?.variableCost ?? 0,
-    initialAdBudget: roadmap[0]?.adSpend ?? 0,
-    initialUnusedCapital: roadmap[0]?.unusedCapital ?? 0,
-    startingUnits: roadmap[0]?.units ?? 0,
-    month12Units: month12?.units ?? 0,
-    month12Profit: month12?.netProfit ?? 0,
+    initialCapitalUsed: roadmap[0] ? roadmap[0].totalCost : 0,
+    initialStockBudget: roadmap[0] ? roadmap[0].stockBudget : 0,
+    initialAdBudget: roadmap[0] ? roadmap[0].totalAdSpend : 0,
+    initialUnusedCapital: roadmap[0] ? roadmap[0].startingCapital - roadmap[0].adFloat - roadmap[0].stockBudget : 0,
+    startingUnits: roadmap[0]?.stockUnits ?? 0,
+    finalRoundUnits: finalRound?.stockUnits ?? 0,
+    finalRoundProfit: finalRound?.netProfit ?? 0,
     cumulativeProfit,
     totalRevenue,
     totalAdSpend,
+    totalDays: cumulativeDays,
+    totalCashKept,
+    adFloatNeeded,
+    adBudgetSavedVsMonthly,
     risk,
     roadmap,
   };
@@ -305,11 +343,21 @@ function buildAllScenarios(
   markups: ScenarioInput[],
   cpaCases: ScenarioInput[],
   reinvestCases: ScenarioInput[],
+  adMode: "upfront" | "rolling",
+  dailyAdSpend: number,
+  payoutCycleDays: number,
+  maxRounds: number,
 ) {
   return markups.flatMap((markup) =>
-    cpaCases.flatMap((cpa) => reinvestCases.map((reinvest) => buildScenario(inputs, extraCosts, markup, cpa, reinvest))),
+    cpaCases.flatMap((cpa) => 
+      reinvestCases.map((reinvest) => 
+        buildScenario(inputs, extraCosts, markup, cpa, reinvest, adMode, dailyAdSpend, payoutCycleDays, maxRounds)
+      )
+    ),
   );
 }
+
+
 
 function MultiScenarioLineChart({ scenarios }: { scenarios: ScenarioResult[] }) {
   const [hoveredPoint, setHoveredPoint] = useState<{ index: number; xPct: number } | null>(null);
@@ -323,11 +371,12 @@ function MultiScenarioLineChart({ scenarios }: { scenarios: ScenarioResult[] }) 
     let runningCash = 0;
     const values = scenario.roadmap.map((row) => {
       runningCash += row.cashKept;
-      return { month: row.month, value: runningCash, cashKept: row.cashKept };
+      return { round: row.round, value: runningCash, cashKept: row.cashKept };
     });
 
     return { scenario, values, totalCash: runningCash };
   });
+  const maxRounds = scenarios[0]?.roadmap.length ?? 10;
   const values = series.flatMap((item) => item.values.map((point) => point.value));
   const maxCash = Math.max(...values, 1);
   const minCash = 0;
@@ -351,13 +400,13 @@ function MultiScenarioLineChart({ scenarios }: { scenarios: ScenarioResult[] }) 
           className="line-chart multi-line-chart"
           viewBox={`0 0 ${width} ${height}`}
           role="img"
-          aria-label="Accumulated monthly cash kept by reinvest rate"
+          aria-label="Accumulated cash kept by reinvest rate"
           onMouseMove={(event) => {
             const rect = event.currentTarget.getBoundingClientRect();
             const scaledX = ((event.clientX - rect.left) / rect.width) * width;
-            const rawIndex = Math.round(((scaledX - padX) / chartWidth) * 11);
-            const index = Math.max(0, Math.min(11, rawIndex));
-            setHoveredPoint({ index, xPct: Math.max(12, Math.min(88, (xFor(index, 12) / width) * 100)) });
+            const rawIndex = Math.round(((scaledX - padX) / chartWidth) * (maxRounds - 1));
+            const index = Math.max(0, Math.min(maxRounds - 1, rawIndex));
+            setHoveredPoint({ index, xPct: Math.max(12, Math.min(88, (xFor(index, maxRounds) / width) * 100)) });
           }}
           onMouseLeave={() => setHoveredPoint(null)}
         >
@@ -375,13 +424,13 @@ function MultiScenarioLineChart({ scenarios }: { scenarios: ScenarioResult[] }) 
           <line className="axis-line" x1={padX} x2={width - 28} y1={height - padBottom} y2={height - padBottom} />
           <line className="axis-line" x1={padX} x2={padX} y1={padTop} y2={height - padBottom} />
           <line className="zero-line" x1={padX} x2={width - 28} y1={zeroY} y2={zeroY} />
-          {Array.from({ length: 12 }, (_, index) => {
-            const x = xFor(index, 12);
+          {Array.from({ length: maxRounds }, (_, index) => {
+            const x = xFor(index, maxRounds);
             return (
-              <g key={`m-${index + 1}`}>
+              <g key={`r-${index + 1}`}>
                 <line className="grid-line vertical" x1={x} x2={x} y1={padTop} y2={height - padBottom} />
                 <text x={x} y={height - 8} textAnchor="middle">
-                  M{index + 1}
+                  R{index + 1}
                 </text>
               </g>
             );
@@ -389,8 +438,8 @@ function MultiScenarioLineChart({ scenarios }: { scenarios: ScenarioResult[] }) 
           {hoveredIndex !== null ? (
             <line
               className="hover-line"
-              x1={xFor(hoveredIndex, 12)}
-              x2={xFor(hoveredIndex, 12)}
+              x1={xFor(hoveredIndex, maxRounds)}
+              x2={xFor(hoveredIndex, maxRounds)}
               y1={padTop}
               y2={height - padBottom}
             />
@@ -413,7 +462,7 @@ function MultiScenarioLineChart({ scenarios }: { scenarios: ScenarioResult[] }) 
                   const y = yFor(point.value);
                   return (
                     <circle
-                      key={`${scenario.id}-${point.month}`}
+                      key={`${scenario.id}-${point.round}`}
                       cx={x}
                       cy={y}
                       r={hoveredIndex === index ? 6 : 4}
@@ -427,7 +476,7 @@ function MultiScenarioLineChart({ scenarios }: { scenarios: ScenarioResult[] }) 
         </svg>
         {hoveredPoint ? (
           <div className="chart-hover-tooltip" style={{ left: `${hoveredPoint.xPct}%` }}>
-            <strong>เดือน M{hoveredPoint.index + 1}</strong>
+            <strong>รอบ R{hoveredPoint.index + 1}</strong>
             {series.map(({ scenario, values }, index) => {
               const point = values[hoveredPoint.index];
               return (
@@ -437,8 +486,8 @@ function MultiScenarioLineChart({ scenarios }: { scenarios: ScenarioResult[] }) 
                     {percent(scenario.reinvestRate * 100)}
                   </span>
                   <div>
-                    <b>{currency(point.value)}</b>
-                    <small>เดือนนี้ {currency(point.cashKept)}</small>
+                    <b>{currency(point?.value ?? 0)}</b>
+                    <small>รอบนี้ {currency(point?.cashKept ?? 0)}</small>
                   </div>
                 </div>
               );
@@ -454,7 +503,7 @@ function MultiScenarioLineChart({ scenarios }: { scenarios: ScenarioResult[] }) 
               {scenario.reinvestLabel}
             </span>
             <strong>{currency(totalCash)}</strong>
-            <small>{percent(scenario.reinvestRate * 100)} reinvest · เงินเก็บสุทธิ 12 เดือน</small>
+            <small>{percent(scenario.reinvestRate * 100)} reinvest · เงินเก็บสุทธิ {maxRounds} รอบ</small>
           </div>
         ))}
       </div>
@@ -494,6 +543,10 @@ export default function Home() {
   const [customReinvest, setCustomReinvest] = useState<number | undefined>();
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [adMode, setAdMode] = useState<"upfront" | "rolling">("upfront");
+  const [dailyAdSpend, setDailyAdSpend] = useState(1000);
+  const [payoutCycleDays, setPayoutCycleDays] = useState(5);
+  const [maxRounds, setMaxRounds] = useState(10);
 
   const baseCost = basePerUnitCost(inputs, extraCosts);
   const effectiveMarkups = useMemo(() => {
@@ -542,8 +595,8 @@ export default function Home() {
   }, [customReinvest, reinvestCases]);
 
   const scenarios = useMemo(
-    () => buildAllScenarios(inputs, extraCosts, effectiveMarkups, effectiveCpaCases, effectiveReinvestCases),
-    [inputs, extraCosts, effectiveMarkups, effectiveCpaCases, effectiveReinvestCases],
+    () => buildAllScenarios(inputs, extraCosts, effectiveMarkups, effectiveCpaCases, effectiveReinvestCases, adMode, dailyAdSpend, payoutCycleDays, maxRounds),
+    [inputs, extraCosts, effectiveMarkups, effectiveCpaCases, effectiveReinvestCases, adMode, dailyAdSpend, payoutCycleDays, maxRounds],
   );
 
   const sortedScenarios = useMemo(
@@ -585,7 +638,7 @@ export default function Home() {
   const totalMonthlyFixed = monthlyFixedCost(inputs, extraCosts);
   const scenarioCount = scenarios.length;
   const totalCostPerOrder = (selectedScenario?.trueCostBeforeAds ?? 0) + (selectedScenario?.cpa ?? 0);
-  const totalCashKept = selectedScenario?.roadmap.reduce((sum, row) => sum + row.cashKept, 0) ?? 0;
+  const totalCashKept = selectedScenario?.totalCashKept ?? 0;
   const selectedCpaCase = effectiveCpaCases.find((cpaCase) => cpaCase.label === selectedScenario?.cpaLabel);
   const saleKeepRate = Math.max(0.01, 1 - clamp(inputs.refundRate) / 100 - percentCostRate(inputs, extraCosts));
   const cpaIsFixedBaht = Boolean(selectedCpaCase?.customCpa && selectedCpaCase.customCpa > 0);
@@ -602,7 +655,7 @@ export default function Home() {
   const grossMarginPct = selectedScenario && selectedScenario.sellingPrice > 0 ? ((selectedScenario.sellingPrice - selectedScenario.trueCostBeforeAds) / selectedScenario.sellingPrice) * 100 : 0;
   const grossMarginProfit = selectedScenario ? selectedScenario.sellingPrice - selectedScenario.trueCostBeforeAds : 0;
 
-  const finalRoadmapRow = selectedScenario?.roadmap[11];
+  const finalRoadmapRow = selectedScenario?.roadmap[selectedScenario.roadmap.length - 1];
   const capitalMultiplier = selectedScenario && finalRoadmapRow && inputs.startingCapital > 0
     ? (finalRoadmapRow.nextCapital + totalCashKept) / inputs.startingCapital
     : 1;
@@ -614,8 +667,8 @@ export default function Home() {
   const cpaSafetyBufferVal = selectedScenario ? selectedScenario.breakEvenCpa - selectedScenario.cpa : 0;
 
   const startingUnits = selectedScenario?.startingUnits ?? 0;
-  const month12Units = selectedScenario?.month12Units ?? 0;
-  const scaleMultiplier = startingUnits > 0 ? month12Units / startingUnits : 0;
+  const finalRoundUnits = selectedScenario?.finalRoundUnits ?? 0;
+  const scaleMultiplier = startingUnits > 0 ? finalRoundUnits / startingUnits : 0;
 
   function setInput<K extends keyof Inputs>(key: K, value: Inputs[K]) {
     setInputs((current) => ({ ...current, [key]: value }));
@@ -664,7 +717,7 @@ export default function Home() {
           <span className="eyebrow">Commerce Scale Planner</span>
           <h1>วางแผนสเกลสินค้า E-commerce จากทุนจริง</h1>
           <p>
-            ระบบจำลองแผนการเติบโต 12 เดือน ตามโครงสร้างราคาทุนจริง, CPA และอัตราทบทุนสะสม
+            ระบบจำลองแผนการเติบโตรายรอบ ตามโครงสร้างราคาทุนจริง, CPA และอัตราทบทุนสะสม
           </p>
         </div>
         <button
@@ -694,9 +747,10 @@ export default function Home() {
           </div>
 
           <div className="input-section">
-            <h3 className="section-title">เงินทุน</h3>
+            <h3 className="section-title">เงินทุนและระยะเวลา</h3>
             <div className="field-grid">
               <NumberField formatThousands unit="฿" label="ทุนเริ่มต้น" value={inputs.startingCapital} onChange={(value) => setInput("startingCapital", value)} />
+              <NumberField unit="รอบ" label="จำลองล่วงหน้า" value={maxRounds} onChange={setMaxRounds} />
             </div>
           </div>
 
@@ -788,6 +842,8 @@ export default function Home() {
             />
           </div>
 
+
+
           <button className="analyze-wide" onClick={runAnalysis}>
             <Calculator size={18} />
             วิเคราะห์
@@ -798,11 +854,13 @@ export default function Home() {
           {!hasAnalyzed ? (
             <div className="empty-state">
               <Calculator size={42} />
-              <h2>พร้อมคำนวณแผน 12 เดือน</h2>
+              <h2>พร้อมจำลองแผนธุรกิจรายรอบ</h2>
               <p>กรอกต้นทุนและทุนเริ่มต้น แล้วกดวิเคราะห์เพื่อสร้าง roadmap</p>
             </div>
           ) : (
             <>
+
+
               <div className="selector-stack">
                 <PriceControlCard
                   markups={markups}
@@ -846,6 +904,86 @@ export default function Home() {
                 />
               </div>
 
+              <div className="simulation-settings-card">
+                <div className="card-title compact">
+                  <div>
+                    <h2>รูปแบบการจัดการเงินแอด (Simulation Mode)</h2>
+                    <p>จำลองการหักค่าแอดแบบล่วงหน้าเต็มรอบ หรือแบ่งจ่ายรายวันตามกระแสเงินสด</p>
+                  </div>
+                </div>
+
+                <div className="mode-toggle-group">
+                  <button
+                    className={`mode-toggle-btn ${adMode === "upfront" ? "active" : ""}`}
+                    onClick={() => setAdMode("upfront")}
+                  >
+                    <CircleDollarSign className="mode-toggle-icon" size={22} />
+                    <div className="mode-toggle-label">
+                      <span className="mode-title">แบบกันเงินแอดเต็มรอบ</span>
+                      <span className="mode-subtitle">(Upfront Ad Budget)</span>
+                    </div>
+                  </button>
+                  <button
+                    className={`mode-toggle-btn ${adMode === "rolling" ? "active" : ""}`}
+                    onClick={() => setAdMode("rolling")}
+                  >
+                    <RefreshCcw className="mode-toggle-icon" size={22} />
+                    <div className="mode-toggle-label">
+                      <span className="mode-title">แบบหมุนเวียนรายวัน</span>
+                      <span className="mode-subtitle">(Rolling Ad Float)</span>
+                    </div>
+                  </button>
+                </div>
+
+                {adMode === "rolling" && (
+                  <div className="rolling-settings-container">
+                    <div className="rolling-settings-grid">
+                      <div className="rolling-input-wrap">
+                        <label>
+                          <span>งบแอดต่อวัน (Daily Ad Spend)</span>
+                          <div className="custom-input-wrapper">
+                            <span className="input-prefix">฿</span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={dailyAdSpend === 0 ? "" : number.format(dailyAdSpend)}
+                              placeholder="1,000"
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(/[^\d.]/g, "");
+                                setDailyAdSpend(clamp(Number(raw)));
+                              }}
+                            />
+                            <span className="input-suffix">/วัน</span>
+                          </div>
+                        </label>
+                      </div>
+                      <div className="rolling-input-wrap">
+                        <label>
+                          <span>ระยะเวลารอเงินเข้า (Payout Cycle)</span>
+                          <div className="custom-input-wrapper">
+                            <input
+                              type="number"
+                              value={payoutCycleDays === 0 ? "" : payoutCycleDays}
+                              placeholder="5"
+                              onChange={(e) => setPayoutCycleDays(clamp(Number(e.target.value)))}
+                            />
+                            <span className="input-suffix">วัน</span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                    <div className="rolling-insight-bar">
+                      <div className="daily-insight-icon">💡</div>
+                      <div className="daily-insight-body">
+                        <span>
+                          เงินลอยตัว Ad Float = <strong>฿{number.format(dailyAdSpend * payoutCycleDays)}</strong> (กันไว้หมุน {payoutCycleDays} วัน)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="summary-grid">
                 <MetricCard
                   icon={<Boxes />}
@@ -863,13 +1001,13 @@ export default function Home() {
                   icon={<TrendingUp />}
                   label="ROAS ที่ได้"
                   value={`${actualRoas.toFixed(2)}x`}
-                  detail="รายได้สุทธิ / Ad spend 12 เดือน"
+                  detail={`รายได้สุทธิ / Ad spend รวม ${maxRounds} รอบ`}
                 />
                 <MetricCard
                   icon={<CircleDollarSign />}
                   label="รายได้สุทธิ"
                   value={currency(totalCashKept)}
-                  detail="รวมเงินเก็บ 12 เดือน"
+                  detail={`รวมเงินเก็บ ${maxRounds} รอบ`}
                 />
                 <MetricCard
                   icon={<Percent />}
@@ -893,31 +1031,32 @@ export default function Home() {
                   icon={<TrendingUp />}
                   label="ศักยภาพการสเกล"
                   value={`${scaleMultiplier.toFixed(1)}x`}
-                  detail={`จากเดือนแรก ${whole(startingUnits)} สู่เดือนท้าย ${whole(month12Units)} ชิ้น/เดือน`}
+                  detail={`จากรอบแรก ${whole(startingUnits)} สู่รอบท้าย ${whole(finalRoundUnits)} ชิ้น`}
                 />
               </div>
 
               <div className="table-card">
                 <div className="card-title compact">
-                  <h2>12-month roadmap</h2>
-                  <span>{inputs.productName}</span>
+                  <h2>Round-by-Round Roadmap</h2>
+                  <span>{inputs.productName} · {selectedScenario.roadmap.length} รอบ · {whole(selectedScenario.totalDays)} วันรวม</span>
                 </div>
                 <div className="table-wrap">
                   <table className="roadmap-table">
                     <thead>
                       <tr className="group-row">
-                        <th className="plan-head" colSpan={2}>แผน</th>
-                        <th className="cost-head" colSpan={2}>ต้นทุน</th>
-                        <th className="quantity-head" colSpan={1}>จำนวนขาย</th>
+                        <th className="plan-head" colSpan={1}>รอบ</th>
+                        <th className="cost-head" colSpan={3}>การจัดสรรทุน</th>
+                        <th className="quantity-head" colSpan={2}>Stock & ระยะเวลา</th>
                         <th className="sales-head" colSpan={1}>ยอดขาย</th>
                         <th className="profit-head" colSpan={2}>กำไร / เงินสด</th>
                       </tr>
                       <tr>
-                        <th className="plan-head">เดือน</th>
-                        <th className="plan-head">เงินต้น</th>
-                        <th className="cost-head">ค่าของ & ค่าแอด</th>
-                        <th className="cost-head">เงินลงทุนรวม</th>
-                        <th className="quantity-head">ขายได้</th>
+                        <th className="plan-head">รอบ</th>
+                        <th className="cost-head">เงินทุน</th>
+                        <th className="cost-head">Ad Float</th>
+                        <th className="cost-head">งบ Stock</th>
+                        <th className="quantity-head">Stock (ชิ้น)</th>
+                        <th className="quantity-head">หมดใน (วัน)</th>
                         <th className="sales-head">รายได้สุทธิ</th>
                         <th className="profit-head">กำไรสุทธิ</th>
                         <th className="profit-head">การปันส่วน (เก็บ / ทบ)</th>
@@ -925,31 +1064,36 @@ export default function Home() {
                     </thead>
                     <tbody>
                       {selectedScenario.roadmap.map((row) => (
-                        <tr key={row.month}>
+                        <tr key={row.round}>
                           <td className="month-col">
-                            <div>M{row.month}</div>
+                            <div>R{row.round}</div>
                           </td>
                           <td className="capital-col">
                             <div>{currency(row.startingCapital)}</div>
                           </td>
                           <td className="cost-col">
-                            <div>{currency(row.variableCost)}</div>
-                            <div>ค่าแอด {currency(row.adSpend)}</div>
+                            <div>{currency(row.adFloat)}</div>
                           </td>
                           <td className="cost-col">
-                            <div>{currency(row.requiredCapital)}</div>
-                            <div>เหลือทบ {currency(row.unusedCapital)}</div>
+                            <div>{currency(row.stockBudget)}</div>
+                            <div>รวมจ่าย {currency(row.totalCost)}</div>
                           </td>
                           <td className="quantity-col">
-                            <div>{whole(row.units)} ชิ้น</div>
+                            <div>{whole(row.stockUnits)} ชิ้น</div>
+                          </td>
+                          <td className="quantity-col">
+                            <div>{whole(row.roundDays)} วัน</div>
+                            <div>สะสม {whole(row.cumulativeDays)} วัน</div>
                           </td>
                           <td className="sales-col">
-                            <div>{currency(row.revenue)}</div>
+                            <div>{currency(row.totalRevenue)}</div>
+                            <div>แอด {currency(row.totalAdSpend)}</div>
                           </td>
                           <td className="profit-col">
                             <span className={`profit-pill ${row.netProfit >= 0 ? "positive" : "negative"}`}>
                               {currency(row.netProfit)}
                             </span>
+                            <div>{percent(row.profitMargin * 100)}</div>
                           </td>
                           <td className="profit-col">
                             <div>เก็บ {currency(row.cashKept)}</div>
@@ -959,24 +1103,26 @@ export default function Home() {
                       ))}
                       <tr className="total-row">
                         <td className="month-col">
-                          <div>รวม 12 เดือน</div>
+                          <div>รวม {selectedScenario.roadmap.length} รอบ</div>
                         </td>
                         <td className="capital-col">
                           <div>-</div>
                         </td>
                         <td className="cost-col">
-                          <div>{currency(selectedScenario.roadmap.reduce((sum, row) => sum + row.variableCost, 0))}</div>
-                          <div>ค่าแอด {currency(selectedScenario.totalAdSpend)}</div>
+                          <div>-</div>
                         </td>
                         <td className="cost-col">
-                          <div>{currency(selectedScenario.roadmap.reduce((sum, row) => sum + row.requiredCapital, 0))}</div>
-                          <div>เหลือทบ {currency(selectedScenario.roadmap.reduce((sum, row) => sum + row.unusedCapital, 0))}</div>
+                          <div>{currency(selectedScenario.roadmap.reduce((sum, row) => sum + row.stockBudget, 0))}</div>
                         </td>
                         <td className="quantity-col">
-                          <div>{whole(selectedScenario.roadmap.reduce((sum, row) => sum + row.units, 0))} ชิ้น</div>
+                          <div>{whole(selectedScenario.roadmap.reduce((sum, row) => sum + row.stockUnits, 0))} ชิ้น</div>
+                        </td>
+                        <td className="quantity-col">
+                          <div>{whole(selectedScenario.totalDays)} วัน</div>
                         </td>
                         <td className="sales-col">
                           <div>{currency(selectedScenario.totalRevenue)}</div>
+                          <div>แอด {currency(selectedScenario.totalAdSpend)}</div>
                         </td>
                         <td className="profit-col">
                           <span className={`profit-pill ${selectedScenario.cumulativeProfit >= 0 ? "positive" : "negative"}`}>
@@ -984,7 +1130,7 @@ export default function Home() {
                           </span>
                         </td>
                         <td className="profit-col">
-                          <div>เก็บ {currency(totalCashKept)}</div>
+                          <div>เก็บ {currency(selectedScenario.totalCashKept)}</div>
                           <div>ทบ {currency(selectedScenario.roadmap.reduce((sum, row) => sum + row.reinvestedProfit, 0))}</div>
                         </td>
                       </tr>
@@ -1013,6 +1159,8 @@ export default function Home() {
     </main>
   );
 }
+
+
 
 function NumberField({
   label,
