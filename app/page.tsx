@@ -5,12 +5,14 @@ import {
   Calculator,
   CircleDollarSign,
   LineChart,
+  Moon,
   Plus,
   RefreshCcw,
+  Sun,
   Trash2,
   TrendingUp,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type CostType = "perUnit" | "percentSale" | "monthly";
 
@@ -108,8 +110,8 @@ const defaultExtraCosts: ExtraCost[] = [
 
 const defaultMarkups: ScenarioInput[] = [
   { label: "3x", value: 3 },
-  { label: "4x", value: 4 },
   { label: "5x", value: 5 },
+  { label: "10x", value: 10 },
 ];
 
 const defaultCpaCases: ScenarioInput[] = [
@@ -469,6 +471,17 @@ function RiskPill({ risk }: { risk: ScenarioResult["risk"] }) {
 export default function Home() {
   const [inputs, setInputs] = useState<Inputs>(defaultInputs);
   const [extraCosts, setExtraCosts] = useState<ExtraCost[]>(defaultExtraCosts);
+  const [isLightMode, setIsLightMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (isLightMode) {
+        document.body.classList.add("light-mode");
+      } else {
+        document.body.classList.remove("light-mode");
+      }
+    }
+  }, [isLightMode]);
   const markups = defaultMarkups;
   const cpaCases = defaultCpaCases;
   const reinvestCases = defaultReinvestCases;
@@ -629,13 +642,16 @@ export default function Home() {
           <span className="eyebrow">Commerce Scale Planner</span>
           <h1>วางแผนสเกลสินค้า E-commerce จากทุนจริง</h1>
           <p>
-            เริ่มเดือนแรกโดยแบ่งทุนเป็นค่า stock และค่า ads ตาม CPA ของแต่ละเคส แล้วจำลองราคา 3x / 4x / 5x,
-            custom price, CPA 3 ระดับ และ reinvest 12 เดือน
+            ระบบจำลองแผนการเติบโต 12 เดือน ตามโครงสร้างราคาทุนจริง, CPA และอัตราทบทุนสะสม
           </p>
         </div>
-        <button className="primary-action" onClick={runAnalysis}>
-          <Calculator size={20} />
-          วิเคราะห์
+        <button
+          className="theme-toggle-btn"
+          onClick={() => setIsLightMode(!isLightMode)}
+          aria-label="Toggle theme"
+          title={isLightMode ? "สลับเป็นโหมดกลางคืน" : "สลับเป็นโหมดกลางวัน"}
+        >
+          {isLightMode ? <Moon size={20} /> : <Sun size={20} />}
         </button>
       </section>
 
@@ -845,32 +861,32 @@ export default function Home() {
                     <tbody>
                       {selectedScenario.roadmap.map((row) => (
                         <tr key={row.month}>
-                          <td className="plan-col stacked-cell">
+                          <td className="plan-col">
                             <div>M{row.month}</div>
                           </td>
-                          <td className="plan-col stacked-cell">
+                          <td className="plan-col">
                             <div>{currency(row.startingCapital)}</div>
                           </td>
-                          <td className="cost-col stacked-cell">
+                          <td className="cost-col">
                             <div>{currency(row.variableCost)}</div>
                             <div>ค่าแอด {currency(row.adSpend)}</div>
                           </td>
-                          <td className="cost-col stacked-cell">
+                          <td className="cost-col">
                             <div>{currency(row.requiredCapital)}</div>
                             <div>เหลือทบ {currency(row.unusedCapital)}</div>
                           </td>
-                          <td className="quantity-col stacked-cell">
+                          <td className="quantity-col">
                             <div>{whole(row.units)} ชิ้น</div>
                           </td>
-                          <td className="sales-col stacked-cell">
+                          <td className="sales-col">
                             <div>{currency(row.revenue)}</div>
                           </td>
-                          <td className="profit-col stacked-cell">
+                          <td className="profit-col">
                             <span className={`profit-pill ${row.netProfit >= 0 ? "positive" : "negative"}`}>
                               {currency(row.netProfit)}
                             </span>
                           </td>
-                          <td className="profit-col stacked-cell">
+                          <td className="profit-col">
                             <div>เก็บ {currency(row.cashKept)}</div>
                             <div>ทบ {currency(row.reinvestedProfit)}</div>
                           </td>
@@ -1014,7 +1030,6 @@ function PriceControlCard({
       <div className="card-title compact">
         <div>
           <h2>เลือกราคาขาย</h2>
-          <p>เลือก 3x / 4x / 5x หรือใช้ราคาขายที่กำหนดเอง</p>
         </div>
       </div>
       <div className="selector-insight">
@@ -1022,8 +1037,7 @@ function PriceControlCard({
         <strong>{currency(minimumSellingPrice)}</strong>
         <small>ต่ำกว่านี้กำไรต่อออเดอร์เริ่มติดลบ</small>
       </div>
-      <div className="selector-row">
-        <div className="choice-buttons">
+      <div className="choice-buttons">
         {markups.map((markup, index) => {
           const defaultPrice = markup.customPrice && markup.customPrice > 0 ? markup.customPrice : baseCost * clamp(markup.value, 0.1);
 
@@ -1038,19 +1052,20 @@ function PriceControlCard({
             </button>
           );
         })}
-        </div>
-        <div className="custom-input-card">
-          <label>
-            <span>ราคาขายเอง (บาท)</span>
-            <input
-              type="number"
-              value={customSellingPrice ?? ""}
-              placeholder="เช่น 990"
-              onChange={(event) =>
-                onCustomSellingPriceChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))
-              }
-            />
-          </label>
+        <div 
+          className={`choice-button custom-input-choice ${selectedMarkupLabel === "ตั้งราคาเอง" ? "active" : ""}`}
+          onClick={() => onSelectMarkup("ตั้งราคาเอง")}
+        >
+          <span>ตั้งราคาเอง</span>
+          <input
+            type="number"
+            value={customSellingPrice ?? ""}
+            placeholder="ระบุราคาเอง"
+            onChange={(event) =>
+              onCustomSellingPriceChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))
+            }
+            onClick={(event) => event.stopPropagation()}
+          />
         </div>
       </div>
     </div>
@@ -1079,7 +1094,6 @@ function CpaControlCard({
       <div className="card-title compact">
         <div>
           <h2>เลือก CPA (ค่าแอดเฉลี่ยต่อออเดอร์)</h2>
-          <p>เลือก CPA เพื่อดูผลลัพธ์ของแต่ละระดับความยากง่าย</p>
         </div>
       </div>
       <div className="selector-insight">
@@ -1087,45 +1101,45 @@ function CpaControlCard({
         <strong>{currency(cpaLimit)}</strong>
         <small>CPA ห้ามสูงเกินค่านี้เพื่อหลีกเลี่ยงการขาดทุนต่อออเดอร์</small>
       </div>
-      <div className="selector-row">
-        <div className="choice-buttons">
-          {cpaCases.map((cpaCase, index) => {
-            const cpaValue =
-              cpaCase.customCpa && cpaCase.customCpa > 0
-                ? cpaCase.customCpa
-                : selectedSellingPrice * (clamp(cpaCase.value) / 100);
-            
-            const riskPct = cpaLimit > 0 ? Math.min(100, Math.max(0, (cpaValue / cpaLimit) * 100)) : 100;
-            const meterColor = riskPct > 85 ? "var(--red)" : riskPct > 60 ? "var(--amber)" : "var(--green)";
+      <div className="choice-buttons">
+        {cpaCases.map((cpaCase, index) => {
+          const cpaValue =
+            cpaCase.customCpa && cpaCase.customCpa > 0
+              ? cpaCase.customCpa
+              : selectedSellingPrice * (clamp(cpaCase.value) / 100);
+          
+          const riskPct = cpaLimit > 0 ? Math.min(100, Math.max(0, (cpaValue / cpaLimit) * 100)) : 100;
+          const meterColor = riskPct > 85 ? "var(--red)" : riskPct > 60 ? "var(--amber)" : "var(--green)";
 
-            return (
-              <button
-                className={`choice-button ${selectedCpaLabel === cpaCase.label ? "active" : ""}`}
-                key={`${cpaCase.label}-${index}`}
-                onClick={() => onSelectCpa(cpaCase.label)}
-              >
-                <span>{cpaCase.label}</span>
-                <strong>{currency(cpaValue)}</strong>
-                <div className="cpa-meter-wrapper">
-                  <div className="cpa-meter-bg">
-                    <div className="cpa-meter-fill" style={{ width: `${riskPct}%`, backgroundColor: meterColor }} />
-                  </div>
-                  <small style={{ color: meterColor, fontWeight: 700 }}>{riskPct.toFixed(0)}% ของ Limit</small>
+          return (
+            <button
+              className={`choice-button ${selectedCpaLabel === cpaCase.label ? "active" : ""}`}
+              key={`${cpaCase.label}-${index}`}
+              onClick={() => onSelectCpa(cpaCase.label)}
+            >
+              <span>{cpaCase.label}</span>
+              <strong>{currency(cpaValue)}</strong>
+              <div className="cpa-meter-wrapper">
+                <div className="cpa-meter-bg">
+                  <div className="cpa-meter-fill" style={{ width: `${riskPct}%`, backgroundColor: meterColor }} />
                 </div>
-              </button>
-            );
-          })}
-        </div>
-        <div className="custom-input-card">
-          <label>
-            <span>CPA กำหนดเอง (บาท)</span>
-            <input
-              type="number"
-              value={customCpa ?? ""}
-              placeholder="เช่น 280"
-              onChange={(event) => onCustomCpaChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))}
-            />
-          </label>
+                <small style={{ color: meterColor, fontWeight: 700 }}>{riskPct.toFixed(0)}% ของ Limit</small>
+              </div>
+            </button>
+          );
+        })}
+        <div 
+          className={`choice-button custom-input-choice ${selectedCpaLabel === "CPA เอง" ? "active" : ""}`}
+          onClick={() => onSelectCpa("CPA เอง")}
+        >
+          <span>CPA เอง</span>
+          <input
+            type="number"
+            value={customCpa ?? ""}
+            placeholder="ระบุ CPA"
+            onChange={(event) => onCustomCpaChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))}
+            onClick={(event) => event.stopPropagation()}
+          />
         </div>
       </div>
     </div>
@@ -1150,40 +1164,39 @@ function ReinvestControlCard({
       <div className="card-title compact">
         <div>
           <h2>เลือก % Reinvest (การทบทุนสะสม)</h2>
-          <p>เลือกสัดส่วนการนำกำไรสุทธิไปลงทุนเพิ่มในรอบเดือนถัดไป</p>
         </div>
       </div>
-      <div className="selector-row">
-        <div className="choice-buttons">
-          {reinvestCases.map((reinvestCase, index) => {
-            const rateVal = reinvestCase.customReinvest ?? reinvestCase.value;
-            const strategy = rateVal <= 35 ? "เน้นเก็บเงินสดเร็ว" : rateVal <= 55 ? "การเติบโตสมดุล" : "เน้นเร่งสเกลโตไว";
-            
-            return (
-              <button
-                className={`choice-button ${selectedReinvestLabel === reinvestCase.label ? "active" : ""}`}
-                key={`${reinvestCase.label}-${index}`}
-                onClick={() => onSelectReinvest(reinvestCase.label)}
-              >
-                <span>{reinvestCase.label}</span>
-                <strong>{percent(rateVal)}</strong>
-                <small style={{ marginTop: "2px", opacity: 0.85 }}>{strategy}</small>
-              </button>
-            );
-          })}
-        </div>
-        <div className="custom-input-card">
-          <label>
-            <span>Reinvest เอง (%)</span>
-            <input
-              type="number"
-              value={customReinvest ?? ""}
-              placeholder="เช่น 65"
-              onChange={(event) =>
-                onCustomReinvestChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))
-              }
-            />
-          </label>
+      <div className="choice-buttons">
+        {reinvestCases.map((reinvestCase, index) => {
+          const rateVal = reinvestCase.customReinvest ?? reinvestCase.value;
+          const strategy = rateVal <= 35 ? "เน้นเก็บเงินสดเร็ว" : rateVal <= 55 ? "การเติบโตสมดุล" : "เน้นเร่งสเกลโตไว";
+          
+          return (
+            <button
+              className={`choice-button ${selectedReinvestLabel === reinvestCase.label ? "active" : ""}`}
+              key={`${reinvestCase.label}-${index}`}
+              onClick={() => onSelectReinvest(reinvestCase.label)}
+            >
+              <span>{reinvestCase.label}</span>
+              <strong>{percent(rateVal)}</strong>
+              <small style={{ marginTop: "2px", opacity: 0.85 }}>{strategy}</small>
+            </button>
+          );
+        })}
+        <div 
+          className={`choice-button custom-input-choice ${selectedReinvestLabel === "Reinvest เอง" ? "active" : ""}`}
+          onClick={() => onSelectReinvest("Reinvest เอง")}
+        >
+          <span>Reinvest เอง</span>
+          <input
+            type="number"
+            value={customReinvest ?? ""}
+            placeholder="ระบุ %"
+            onChange={(event) =>
+              onCustomReinvestChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))
+            }
+            onClick={(event) => event.stopPropagation()}
+          />
         </div>
       </div>
     </div>
