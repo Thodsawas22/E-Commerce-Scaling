@@ -365,7 +365,7 @@ body.light-mode .analyze-wide:hover {
 
 .field-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
