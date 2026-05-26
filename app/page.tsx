@@ -676,8 +676,6 @@ export default function Home() {
             <h3 className="section-title">ต้นทุน</h3>
             <div className="field-grid">
               <NumberField formatThousands label="ทุนเริ่มต้น" value={inputs.startingCapital} onChange={(value) => setInput("startingCapital", value)} />
-              <NumberField label="ค่าธรรมเนียม %" value={inputs.paymentFeePercent} onChange={(value) => setInput("paymentFeePercent", value)} />
-              <NumberField label="คืนสินค้า %" value={inputs.refundRate} onChange={(value) => setInput("refundRate", value)} />
             </div>
           </div>
 
@@ -689,6 +687,8 @@ export default function Home() {
               <NumberField label="แพ็กเกจจิ้ง" value={inputs.packagingCost} onChange={(value) => setInput("packagingCost", value)} />
               <NumberField label="Fulfillment" value={inputs.fulfillmentCost} onChange={(value) => setInput("fulfillmentCost", value)} />
               <NumberField label="ส่งถึงลูกค้า" value={inputs.customerShippingCost} onChange={(value) => setInput("customerShippingCost", value)} />
+              <NumberField label="ค่าธรรมเนียม %" value={inputs.paymentFeePercent} onChange={(value) => setInput("paymentFeePercent", value)} />
+              <NumberField label="คืนสินค้า %" value={inputs.refundRate} onChange={(value) => setInput("refundRate", value)} />
             </div>
           </div>
 
