@@ -926,10 +926,10 @@ export default function Home() {
                     <tbody>
                       {selectedScenario.roadmap.map((row) => (
                         <tr key={row.month}>
-                          <td className="plan-col">
+                          <td className="month-col">
                             <div>M{row.month}</div>
                           </td>
-                          <td className="plan-col">
+                          <td className="capital-col">
                             <div>{currency(row.startingCapital)}</div>
                           </td>
                           <td className="cost-col">
@@ -957,6 +957,37 @@ export default function Home() {
                           </td>
                         </tr>
                       ))}
+                      <tr className="total-row">
+                        <td className="month-col">
+                          <div>รวม 12 เดือน</div>
+                        </td>
+                        <td className="capital-col">
+                          <div>-</div>
+                        </td>
+                        <td className="cost-col">
+                          <div>{currency(selectedScenario.roadmap.reduce((sum, row) => sum + row.variableCost, 0))}</div>
+                          <div>ค่าแอด {currency(selectedScenario.totalAdSpend)}</div>
+                        </td>
+                        <td className="cost-col">
+                          <div>{currency(selectedScenario.roadmap.reduce((sum, row) => sum + row.requiredCapital, 0))}</div>
+                          <div>เหลือทบ {currency(selectedScenario.roadmap.reduce((sum, row) => sum + row.unusedCapital, 0))}</div>
+                        </td>
+                        <td className="quantity-col">
+                          <div>{whole(selectedScenario.roadmap.reduce((sum, row) => sum + row.units, 0))} ชิ้น</div>
+                        </td>
+                        <td className="sales-col">
+                          <div>{currency(selectedScenario.totalRevenue)}</div>
+                        </td>
+                        <td className="profit-col">
+                          <span className={`profit-pill ${selectedScenario.cumulativeProfit >= 0 ? "positive" : "negative"}`}>
+                            {currency(selectedScenario.cumulativeProfit)}
+                          </span>
+                        </td>
+                        <td className="profit-col">
+                          <div>เก็บ {currency(totalCashKept)}</div>
+                          <div>ทบ {currency(selectedScenario.roadmap.reduce((sum, row) => sum + row.reinvestedProfit, 0))}</div>
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>

@@ -1367,9 +1367,11 @@ body.light-mode tbody tr:nth-child(even) {
   margin-top: 2px;
 }
 
-.roadmap-table td.plan-col div:first-child,
-.roadmap-table td.plan-col div:last-child {
-  text-align: left;
+.roadmap-table td.month-col div:first-child,
+.roadmap-table td.month-col div:last-child,
+.roadmap-table td.capital-col div:first-child,
+.roadmap-table td.capital-col div:last-child {
+  text-align: center;
 }
 
 /* Style grouping headers */
@@ -1397,6 +1399,7 @@ body.light-mode .roadmap-table .group-row th {
   background: #1e293b !important;
   color: #f8fafc !important;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center !important;
 }
 .roadmap-table .cost-head {
   background: #78350f !important;
@@ -1423,6 +1426,7 @@ body.light-mode .roadmap-table .plan-head {
   background: #475569 !important;
   color: #ffffff !important;
   border-right: 1px solid rgba(15, 23, 42, 0.08);
+  text-align: center !important;
 }
 body.light-mode .roadmap-table .cost-head {
   background: #b45309 !important;
@@ -1446,7 +1450,8 @@ body.light-mode .roadmap-table .profit-head {
 }
 
 /* Column specific styles */
-.roadmap-table .plan-col {
+.roadmap-table .month-col,
+.roadmap-table .capital-col {
   background: rgba(248, 250, 252, 0.02);
   color: var(--text-secondary);
 }
@@ -1470,7 +1475,8 @@ body.light-mode .roadmap-table .profit-head {
 }
 
 /* Zebra striping (even rows) */
-.roadmap-table tbody tr:nth-child(even) .plan-col {
+.roadmap-table tbody tr:nth-child(even) .month-col,
+.roadmap-table tbody tr:nth-child(even) .capital-col {
   background: rgba(248, 250, 252, 0.05);
 }
 .roadmap-table tbody tr:nth-child(even) .cost-col {
@@ -1487,7 +1493,8 @@ body.light-mode .roadmap-table .profit-head {
 }
 
 /* Light mode overrides for column backgrounds */
-body.light-mode .roadmap-table .plan-col {
+body.light-mode .roadmap-table .month-col,
+body.light-mode .roadmap-table .capital-col {
   background: #f8fafc;
 }
 body.light-mode .roadmap-table .cost-col {
@@ -1503,7 +1510,8 @@ body.light-mode .roadmap-table .profit-col {
   background: #f0fdf4;
 }
 
-body.light-mode .roadmap-table tbody tr:nth-child(even) .plan-col {
+body.light-mode .roadmap-table tbody tr:nth-child(even) .month-col,
+body.light-mode .roadmap-table tbody tr:nth-child(even) .capital-col {
   background: #f1f5f9;
 }
 body.light-mode .roadmap-table tbody tr:nth-child(even) .cost-col {
@@ -1687,4 +1695,17 @@ body.light-mode .negative {
   .input-panel-bottom-row {
     grid-template-columns: 1fr;
   }
+}
+
+.roadmap-table .total-row td {
+  font-weight: 700;
+  border-top: 2px solid var(--border-glow);
+  border-bottom: 2px double var(--border-glow);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+body.light-mode .roadmap-table .total-row td {
+  background: #f8fafc;
+  border-top: 2px solid rgba(15, 23, 42, 0.12);
+  border-bottom: 2px double rgba(15, 23, 42, 0.12);
 }
