@@ -105,6 +105,7 @@ const defaultInputs: Inputs = {
 };
 
 const defaultExtraCosts: ExtraCost[] = [
+  { id: "google-ai-pro", name: "Google AI Pro", type: "monthly", amount: 750 },
   { id: "sample-reserve", name: "Warranty / reserve", type: "perUnit", amount: 8 },
 ];
 
@@ -658,38 +659,37 @@ export default function Home() {
       <section className="workspace">
         <aside className="input-panel">
           <div className="panel-heading">
-            <h2>ต้นทุน (ต่อ 1 ชิ้น)</h2>
-            <button
-              className="ghost-button"
-              onClick={() => {
-                setInputs(defaultInputs);
-                setExtraCosts(defaultExtraCosts);
-                setCustomSellingPrice(undefined);
-                setCustomCpa(undefined);
-                setCustomReinvest(undefined);
-                setHasAnalyzed(false);
-                setSelectedId(null);
-              }}
-            >
-              <RefreshCcw size={16} />
-              รีเซ็ต
-            </button>
+            <h2>แผงควบคุม</h2>
           </div>
 
-          <div className="field-grid">
-            <label className="field">
-              <span>ชื่อสินค้า</span>
-              <input value={inputs.productName} onChange={(event) => setInput("productName", event.target.value)} />
-            </label>
-            <NumberField formatThousands label="ทุนเริ่มต้น" value={inputs.startingCapital} onChange={(value) => setInput("startingCapital", value)} />
-            <NumberField label="ราคาสินค้า" value={inputs.productCost} onChange={(value) => setInput("productCost", value)} />
-            <NumberField label="ขนส่ง/นำเข้า" value={inputs.inboundShippingCost} onChange={(value) => setInput("inboundShippingCost", value)} />
-            <NumberField label="แพ็กเกจจิ้ง" value={inputs.packagingCost} onChange={(value) => setInput("packagingCost", value)} />
-            <NumberField label="Fulfillment" value={inputs.fulfillmentCost} onChange={(value) => setInput("fulfillmentCost", value)} />
-            <NumberField label="ส่งถึงลูกค้า" value={inputs.customerShippingCost} onChange={(value) => setInput("customerShippingCost", value)} />
-            <NumberField label="ค่าธรรมเนียม %" value={inputs.paymentFeePercent} onChange={(value) => setInput("paymentFeePercent", value)} />
-            <NumberField label="Fixed cost/เดือน" value={inputs.fixedMonthlyCost} onChange={(value) => setInput("fixedMonthlyCost", value)} />
-            <NumberField label="คืนสินค้า %" value={inputs.refundRate} onChange={(value) => setInput("refundRate", value)} />
+          <div className="input-section">
+            <h3 className="section-title">Product</h3>
+            <div className="field-grid">
+              <label className="field">
+                <span>ชื่อสินค้า</span>
+                <input value={inputs.productName} onChange={(event) => setInput("productName", event.target.value)} />
+              </label>
+            </div>
+          </div>
+
+          <div className="input-section">
+            <h3 className="section-title">ต้นทุน</h3>
+            <div className="field-grid">
+              <NumberField formatThousands label="ทุนเริ่มต้น" value={inputs.startingCapital} onChange={(value) => setInput("startingCapital", value)} />
+              <NumberField label="ค่าธรรมเนียม %" value={inputs.paymentFeePercent} onChange={(value) => setInput("paymentFeePercent", value)} />
+              <NumberField label="คืนสินค้า %" value={inputs.refundRate} onChange={(value) => setInput("refundRate", value)} />
+            </div>
+          </div>
+
+          <div className="input-section">
+            <h3 className="section-title">ต้นทุน (ต่อ 1 ชิ้น)</h3>
+            <div className="field-grid">
+              <NumberField label="ราคาสินค้า" value={inputs.productCost} onChange={(value) => setInput("productCost", value)} />
+              <NumberField label="ขนส่ง/นำเข้า" value={inputs.inboundShippingCost} onChange={(value) => setInput("inboundShippingCost", value)} />
+              <NumberField label="แพ็กเกจจิ้ง" value={inputs.packagingCost} onChange={(value) => setInput("packagingCost", value)} />
+              <NumberField label="Fulfillment" value={inputs.fulfillmentCost} onChange={(value) => setInput("fulfillmentCost", value)} />
+              <NumberField label="ส่งถึงลูกค้า" value={inputs.customerShippingCost} onChange={(value) => setInput("customerShippingCost", value)} />
+            </div>
           </div>
 
           <div className="input-panel-bottom-row">
