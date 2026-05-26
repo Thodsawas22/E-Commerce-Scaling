@@ -675,20 +675,20 @@ export default function Home() {
           <div className="input-section">
             <h3 className="section-title">ต้นทุน</h3>
             <div className="field-grid">
-              <NumberField formatThousands label="ทุนเริ่มต้น" value={inputs.startingCapital} onChange={(value) => setInput("startingCapital", value)} />
+              <NumberField formatThousands unit="฿" label="ทุนเริ่มต้น" value={inputs.startingCapital} onChange={(value) => setInput("startingCapital", value)} />
             </div>
           </div>
 
           <div className="input-section">
             <h3 className="section-title">ต้นทุน (ต่อ 1 ชิ้น)</h3>
             <div className="field-grid">
-              <NumberField label="ราคาสินค้า" value={inputs.productCost} onChange={(value) => setInput("productCost", value)} />
-              <NumberField label="ขนส่ง/นำเข้า" value={inputs.inboundShippingCost} onChange={(value) => setInput("inboundShippingCost", value)} />
-              <NumberField label="แพ็กเกจจิ้ง" value={inputs.packagingCost} onChange={(value) => setInput("packagingCost", value)} />
-              <NumberField label="Fulfillment" value={inputs.fulfillmentCost} onChange={(value) => setInput("fulfillmentCost", value)} />
-              <NumberField label="ส่งถึงลูกค้า" value={inputs.customerShippingCost} onChange={(value) => setInput("customerShippingCost", value)} />
-              <NumberField label="ค่าธรรมเนียม %" value={inputs.paymentFeePercent} onChange={(value) => setInput("paymentFeePercent", value)} />
-              <NumberField label="คืนสินค้า %" value={inputs.refundRate} onChange={(value) => setInput("refundRate", value)} />
+              <NumberField unit="฿" label="ราคาสินค้า" value={inputs.productCost} onChange={(value) => setInput("productCost", value)} />
+              <NumberField unit="฿" label="ขนส่ง/นำเข้า" value={inputs.inboundShippingCost} onChange={(value) => setInput("inboundShippingCost", value)} />
+              <NumberField unit="฿" label="แพ็กเกจจิ้ง" value={inputs.packagingCost} onChange={(value) => setInput("packagingCost", value)} />
+              <NumberField unit="฿" label="Fulfillment" value={inputs.fulfillmentCost} onChange={(value) => setInput("fulfillmentCost", value)} />
+              <NumberField unit="฿" label="ส่งถึงลูกค้า" value={inputs.customerShippingCost} onChange={(value) => setInput("customerShippingCost", value)} />
+              <NumberField unit="%" label="ค่าธรรมเนียม %" value={inputs.paymentFeePercent} onChange={(value) => setInput("paymentFeePercent", value)} />
+              <NumberField unit="%" label="คืนสินค้า %" value={inputs.refundRate} onChange={(value) => setInput("refundRate", value)} />
             </div>
           </div>
 
@@ -724,17 +724,25 @@ export default function Home() {
                     <option value="percentSale">% ยอดขาย</option>
                     <option value="monthly">ต่อเดือน</option>
                   </select>
-                  <input
-                    type="number"
-                    value={cost.amount}
-                    onChange={(event) =>
-                      setExtraCosts((current) =>
-                        current.map((item) =>
-                          item.id === cost.id ? { ...item, amount: clamp(Number(event.target.value)) } : item,
-                        ),
-                      )
-                    }
-                  />
+                  <div className="field-input-wrapper">
+                    {cost.type !== "percentSale" && <span className="field-unit-prefix">฿</span>}
+                    <input
+                      type="number"
+                      value={cost.amount}
+                      onChange={(event) =>
+                        setExtraCosts((current) =>
+                          current.map((item) =>
+                            item.id === cost.id ? { ...item, amount: clamp(Number(event.target.value)) } : item,
+                          ),
+                        )
+                      }
+                      style={{
+                        paddingLeft: cost.type !== "percentSale" ? "24px" : "14px",
+                        paddingRight: cost.type === "percentSale" ? "24px" : "14px",
+                      }}
+                    />
+                    {cost.type === "percentSale" && <span className="field-unit-suffix">%</span>}
+                  </div>
                   <button className="icon-button danger-button" onClick={() => removeExtraCost(cost.id)} aria-label="ลบต้นทุนอื่นๆ">
                     <Trash2 size={16} />
                   </button>
@@ -924,26 +932,36 @@ function NumberField({
   value,
   wide = false,
   formatThousands = false,
+  unit,
   onChange,
 }: {
   label: string;
   value: number;
   wide?: boolean;
   formatThousands?: boolean;
+  unit?: string;
   onChange: (value: number) => void;
 }) {
   return (
     <label className={`field ${wide ? "wide" : ""}`}>
       <span>{label}</span>
-      <input
-        type={formatThousands ? "text" : "number"}
-        inputMode={formatThousands ? "numeric" : undefined}
-        value={formatThousands ? number.format(value) : value}
-        onChange={(event) => {
-          const rawValue = formatThousands ? event.target.value.replace(/[^\d.]/g, "") : event.target.value;
-          onChange(clamp(Number(rawValue)));
-        }}
-      />
+      <div className="field-input-wrapper">
+        {unit === "฿" && <span className="field-unit-prefix">฿</span>}
+        <input
+          type={formatThousands ? "text" : "number"}
+          inputMode={formatThousands ? "numeric" : undefined}
+          value={formatThousands ? number.format(value) : value}
+          onChange={(event) => {
+            const rawValue = formatThousands ? event.target.value.replace(/[^\d.]/g, "") : event.target.value;
+            onChange(clamp(Number(rawValue)));
+          }}
+          style={{
+            paddingLeft: unit === "฿" ? "24px" : "14px",
+            paddingRight: unit === "%" ? "24px" : "14px",
+          }}
+        />
+        {unit === "%" && <span className="field-unit-suffix">%</span>}
+      </div>
     </label>
   );
 }
