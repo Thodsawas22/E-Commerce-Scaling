@@ -727,16 +727,26 @@ export default function Home() {
                   <div className="field-input-wrapper">
                     {cost.type !== "percentSale" && <span className="field-unit-prefix">฿</span>}
                     <input
-                      type="number"
-                      value={cost.amount === 0 ? "" : cost.amount}
-                      placeholder={cost.type === "percentSale" ? "0" : "0,000"}
-                      onChange={(event) =>
+                      type={cost.type === "percentSale" ? "number" : "text"}
+                      inputMode={cost.type !== "percentSale" ? "numeric" : undefined}
+                      value={
+                        cost.amount === 0
+                          ? ""
+                          : cost.type === "percentSale"
+                            ? cost.amount
+                            : number.format(cost.amount)
+                      }
+                      placeholder="0"
+                      onChange={(event) => {
+                        const rawValue = cost.type === "percentSale"
+                          ? event.target.value
+                          : event.target.value.replace(/[^\d.]/g, "");
                         setExtraCosts((current) =>
                           current.map((item) =>
-                            item.id === cost.id ? { ...item, amount: clamp(Number(event.target.value)) } : item,
+                            item.id === cost.id ? { ...item, amount: clamp(Number(rawValue)) } : item,
                           ),
-                        )
-                      }
+                        );
+                      }}
                       style={{
                         paddingLeft: cost.type !== "percentSale" ? "24px" : "14px",
                         paddingRight: cost.type === "percentSale" ? "24px" : "14px",
@@ -952,7 +962,7 @@ function NumberField({
           type={formatThousands ? "text" : "number"}
           inputMode={formatThousands ? "numeric" : undefined}
           value={formatThousands ? (value === 0 ? "" : number.format(value)) : (value === 0 ? "" : value)}
-          placeholder={unit === "%" ? "0" : "0,000"}
+          placeholder="0"
           onChange={(event) => {
             const rawValue = formatThousands ? event.target.value.replace(/[^\d.]/g, "") : event.target.value;
             onChange(clamp(Number(rawValue)));
