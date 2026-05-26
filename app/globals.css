@@ -1354,24 +1354,23 @@ body.light-mode tbody tr:nth-child(even) {
   width: 100%;
 }
 
+.roadmap-table th,
+.roadmap-table td,
+.roadmap-table td div {
+  text-align: center !important;
+}
+
 .roadmap-table td div:first-child {
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--text-primary);
 }
 
 .roadmap-table td div:last-child {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
-  font-weight: 500;
-  margin-top: 2px;
-}
-
-.roadmap-table td.month-col div:first-child,
-.roadmap-table td.month-col div:last-child,
-.roadmap-table td.capital-col div:first-child,
-.roadmap-table td.capital-col div:last-child {
-  text-align: center;
+  font-weight: 700;
+  margin-top: 3px;
 }
 
 /* Style grouping headers */
@@ -1530,11 +1529,11 @@ body.light-mode .roadmap-table tbody tr:nth-child(even) .profit-col {
 /* Positive / Negative Glow Pills for profit column */
 .profit-pill {
   display: inline-block;
-  padding: 3px 8px;
+  padding: 4px 10px;
   border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  text-align: right;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-align: center;
   transition: all 0.2s ease;
 }
 
