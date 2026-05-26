@@ -11,6 +11,9 @@ import {
   Sun,
   Trash2,
   TrendingUp,
+  Percent,
+  Coins,
+  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -596,6 +599,24 @@ export default function Home() {
       ? selectedScenario.totalRevenue / selectedScenario.totalAdSpend
       : 0;
 
+  const grossMarginPct = selectedScenario && selectedScenario.sellingPrice > 0 ? ((selectedScenario.sellingPrice - selectedScenario.trueCostBeforeAds) / selectedScenario.sellingPrice) * 100 : 0;
+  const grossMarginProfit = selectedScenario ? selectedScenario.sellingPrice - selectedScenario.trueCostBeforeAds : 0;
+
+  const finalRoadmapRow = selectedScenario?.roadmap[11];
+  const capitalMultiplier = selectedScenario && finalRoadmapRow && inputs.startingCapital > 0
+    ? (finalRoadmapRow.nextCapital + totalCashKept) / inputs.startingCapital
+    : 1;
+  const totalBusinessValue = selectedScenario && finalRoadmapRow ? finalRoadmapRow.nextCapital + totalCashKept : 0;
+
+  const cpaSafetyBufferPct = selectedScenario && selectedScenario.breakEvenCpa > 0
+    ? ((selectedScenario.breakEvenCpa - selectedScenario.cpa) / selectedScenario.breakEvenCpa) * 100
+    : 0;
+  const cpaSafetyBufferVal = selectedScenario ? selectedScenario.breakEvenCpa - selectedScenario.cpa : 0;
+
+  const startingUnits = selectedScenario?.startingUnits ?? 0;
+  const month12Units = selectedScenario?.month12Units ?? 0;
+  const scaleMultiplier = startingUnits > 0 ? month12Units / startingUnits : 0;
+
   function setInput<K extends keyof Inputs>(key: K, value: Inputs[K]) {
     setInputs((current) => ({ ...current, [key]: value }));
   }
@@ -849,6 +870,30 @@ export default function Home() {
                   label="รายได้สุทธิ"
                   value={currency(totalCashKept)}
                   detail="รวมเงินเก็บ 12 เดือน"
+                />
+                <MetricCard
+                  icon={<Percent />}
+                  label="อัตรากำไรสินค้า"
+                  value={`${grossMarginPct.toFixed(1)}%`}
+                  detail={`กำไร ${currency(grossMarginProfit)} / ราคาขาย ${currency(selectedScenario.sellingPrice)}`}
+                />
+                <MetricCard
+                  icon={<Coins />}
+                  label="ตัวคูณเงินทุน"
+                  value={`${capitalMultiplier.toFixed(1)}x`}
+                  detail={`ทุนโตจาก ${currency(inputs.startingCapital)} เป็น ${currency(totalBusinessValue)}`}
+                />
+                <MetricCard
+                  icon={<ShieldCheck />}
+                  label="ความปลอดภัยค่าแอด"
+                  value={`${cpaSafetyBufferPct.toFixed(0)}%`}
+                  detail={cpaSafetyBufferVal >= 0 ? `ทนแอดแพงขึ้นได้อีก ${currency(cpaSafetyBufferVal)} / ออเดอร์` : "ค่าแอดเกินเพดานจุดคุ้มทุน"}
+                />
+                <MetricCard
+                  icon={<TrendingUp />}
+                  label="ศักยภาพการสเกล"
+                  value={`${scaleMultiplier.toFixed(1)}x`}
+                  detail={`จากเดือนแรก ${whole(startingUnits)} สู่เดือนท้าย ${whole(month12Units)} ชิ้น/เดือน`}
                 />
               </div>
 
