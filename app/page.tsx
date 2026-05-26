@@ -764,7 +764,7 @@ export default function Home() {
             <>
               <div className="selector-stack">
                 <PriceControlCard
-                  markups={effectiveMarkups}
+                  markups={markups}
                   baseCost={baseCost}
                   minimumSellingPrice={minimumSellingPrice}
                   selectedMarkupLabel={selectedScenario.markupLabel}
@@ -778,7 +778,7 @@ export default function Home() {
                   onSelectMarkup={(label) => chooseScenario({ markupLabel: label })}
                 />
                 <CpaControlCard
-                  cpaCases={effectiveCpaCases}
+                  cpaCases={cpaCases}
                   selectedCpaLabel={selectedScenario.cpaLabel}
                   selectedSellingPrice={selectedScenario.sellingPrice}
                   cpaLimit={selectedScenario.breakEvenCpa}
@@ -792,7 +792,7 @@ export default function Home() {
                   onSelectCpa={(label) => chooseScenario({ cpaLabel: label })}
                 />
                 <ReinvestControlCard
-                  reinvestCases={effectiveReinvestCases}
+                  reinvestCases={reinvestCases}
                   selectedReinvestLabel={selectedScenario.reinvestLabel}
                   customReinvest={customReinvest}
                   onCustomReinvestChange={(value) => {
@@ -1057,15 +1057,18 @@ function PriceControlCard({
           onClick={() => onSelectMarkup("ตั้งราคาเอง")}
         >
           <span>ตั้งราคาเอง</span>
-          <input
-            type="number"
-            value={customSellingPrice ?? ""}
-            placeholder="ระบุราคาเอง"
-            onChange={(event) =>
-              onCustomSellingPriceChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))
-            }
-            onClick={(event) => event.stopPropagation()}
-          />
+          <div className="custom-input-wrapper">
+            <span className="input-prefix">฿</span>
+            <input
+              type="number"
+              value={customSellingPrice ?? ""}
+              placeholder="ระบุราคา"
+              onChange={(event) =>
+                onCustomSellingPriceChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))
+              }
+              onClick={(event) => event.stopPropagation()}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -1133,13 +1136,16 @@ function CpaControlCard({
           onClick={() => onSelectCpa("CPA เอง")}
         >
           <span>CPA เอง</span>
-          <input
-            type="number"
-            value={customCpa ?? ""}
-            placeholder="ระบุ CPA"
-            onChange={(event) => onCustomCpaChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))}
-            onClick={(event) => event.stopPropagation()}
-          />
+          <div className="custom-input-wrapper">
+            <span className="input-prefix">฿</span>
+            <input
+              type="number"
+              value={customCpa ?? ""}
+              placeholder="ระบุ CPA"
+              onChange={(event) => onCustomCpaChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))}
+              onClick={(event) => event.stopPropagation()}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -1188,15 +1194,18 @@ function ReinvestControlCard({
           onClick={() => onSelectReinvest("Reinvest เอง")}
         >
           <span>Reinvest เอง</span>
-          <input
-            type="number"
-            value={customReinvest ?? ""}
-            placeholder="ระบุ %"
-            onChange={(event) =>
-              onCustomReinvestChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))
-            }
-            onClick={(event) => event.stopPropagation()}
-          />
+          <div className="custom-input-wrapper">
+            <input
+              type="number"
+              value={customReinvest ?? ""}
+              placeholder="ระบุ %"
+              onChange={(event) =>
+                onCustomReinvestChange(event.target.value === "" ? undefined : clamp(Number(event.target.value)))
+              }
+              onClick={(event) => event.stopPropagation()}
+            />
+            <span className="input-suffix">%</span>
+          </div>
         </div>
       </div>
     </div>

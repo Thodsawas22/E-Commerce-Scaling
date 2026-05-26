@@ -795,19 +795,55 @@ body.light-mode .choice-button.active {
   cursor: default;
 }
 
+.custom-input-wrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  color: inherit;
+}
+
+.custom-input-wrapper .input-prefix {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-top: 4px;
+  margin-right: 2px;
+  color: inherit;
+}
+
+.custom-input-wrapper .input-suffix {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-top: 4px;
+  margin-left: 2px;
+  color: inherit;
+}
+
 .choice-button.custom-input-choice input {
   width: 100%;
   background: transparent;
   border: none;
   border-bottom: 2px solid rgba(255, 255, 255, 0.2);
   color: inherit;
-  font-family: var(--font-sans);
-  font-size: 1.12rem;
+  font-family: var(--font-display); /* Outfit font to match default buttons strong */
+  font-size: 1.25rem; /* Larger font size to match standard prices */
   font-weight: 800;
   outline: none;
   padding: 2px 0;
   margin-top: 4px;
   transition: border-bottom-color 0.2s ease;
+}
+
+/* Hide spin-button arrows */
+.choice-button.custom-input-choice input::-webkit-outer-spin-button,
+.choice-button.custom-input-choice input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.choice-button.custom-input-choice input[type=number] {
+  -moz-appearance: textfield;
 }
 
 body.light-mode .choice-button.custom-input-choice input {
