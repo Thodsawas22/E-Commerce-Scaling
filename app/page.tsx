@@ -728,7 +728,8 @@ export default function Home() {
                     {cost.type !== "percentSale" && <span className="field-unit-prefix">฿</span>}
                     <input
                       type="number"
-                      value={cost.amount}
+                      value={cost.amount === 0 ? "" : cost.amount}
+                      placeholder={cost.type === "percentSale" ? "0" : "0,000"}
                       onChange={(event) =>
                         setExtraCosts((current) =>
                           current.map((item) =>
@@ -950,7 +951,8 @@ function NumberField({
         <input
           type={formatThousands ? "text" : "number"}
           inputMode={formatThousands ? "numeric" : undefined}
-          value={formatThousands ? number.format(value) : value}
+          value={formatThousands ? (value === 0 ? "" : number.format(value)) : (value === 0 ? "" : value)}
+          placeholder={unit === "%" ? "0" : "0,000"}
           onChange={(event) => {
             const rawValue = formatThousands ? event.target.value.replace(/[^\d.]/g, "") : event.target.value;
             onChange(clamp(Number(rawValue)));
