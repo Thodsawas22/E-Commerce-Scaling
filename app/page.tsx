@@ -676,14 +676,13 @@ export default function Home() {
             </button>
           </div>
 
-          <label className="field wide">
-            <span>ชื่อสินค้า</span>
-            <input value={inputs.productName} onChange={(event) => setInput("productName", event.target.value)} />
-          </label>
-
           <div className="field-grid">
-            <NumberField wide formatThousands label="ทุนเริ่มต้น" value={inputs.startingCapital} onChange={(value) => setInput("startingCapital", value)} />
-            <NumberField wide label="ราคาสินค้า" value={inputs.productCost} onChange={(value) => setInput("productCost", value)} />
+            <label className="field">
+              <span>ชื่อสินค้า</span>
+              <input value={inputs.productName} onChange={(event) => setInput("productName", event.target.value)} />
+            </label>
+            <NumberField formatThousands label="ทุนเริ่มต้น" value={inputs.startingCapital} onChange={(value) => setInput("startingCapital", value)} />
+            <NumberField label="ราคาสินค้า" value={inputs.productCost} onChange={(value) => setInput("productCost", value)} />
             <NumberField label="ขนส่ง/นำเข้า" value={inputs.inboundShippingCost} onChange={(value) => setInput("inboundShippingCost", value)} />
             <NumberField label="แพ็กเกจจิ้ง" value={inputs.packagingCost} onChange={(value) => setInput("packagingCost", value)} />
             <NumberField label="Fulfillment" value={inputs.fulfillmentCost} onChange={(value) => setInput("fulfillmentCost", value)} />
@@ -693,59 +692,61 @@ export default function Home() {
             <NumberField label="คืนสินค้า %" value={inputs.refundRate} onChange={(value) => setInput("refundRate", value)} />
           </div>
 
-          <div className="cost-list">
-            <div className="subhead">
-              <h3>ต้นทุนอื่นๆ</h3>
-              <button className="icon-button" onClick={addExtraCost} aria-label="เพิ่มต้นทุนอื่นๆ">
-                <Plus size={16} />
-              </button>
-            </div>
-            {extraCosts.map((cost) => (
-              <div className="cost-row" key={cost.id}>
-                <input
-                  value={cost.name}
-                  onChange={(event) =>
-                    setExtraCosts((current) =>
-                      current.map((item) => (item.id === cost.id ? { ...item, name: event.target.value } : item)),
-                    )
-                  }
-                />
-                <select
-                  value={cost.type}
-                  onChange={(event) =>
-                    setExtraCosts((current) =>
-                      current.map((item) =>
-                        item.id === cost.id ? { ...item, type: event.target.value as CostType } : item,
-                      ),
-                    )
-                  }
-                >
-                  <option value="perUnit">รายชิ้น</option>
-                  <option value="percentSale">% ยอดขาย</option>
-                  <option value="monthly">ต่อเดือน</option>
-                </select>
-                <input
-                  type="number"
-                  value={cost.amount}
-                  onChange={(event) =>
-                    setExtraCosts((current) =>
-                      current.map((item) =>
-                        item.id === cost.id ? { ...item, amount: clamp(Number(event.target.value)) } : item,
-                      ),
-                    )
-                  }
-                />
-                <button className="icon-button danger-button" onClick={() => removeExtraCost(cost.id)} aria-label="ลบต้นทุนอื่นๆ">
-                  <Trash2 size={16} />
+          <div className="input-panel-bottom-row">
+            <div className="cost-list">
+              <div className="subhead">
+                <h3>ต้นทุนอื่นๆ</h3>
+                <button className="icon-button" onClick={addExtraCost} aria-label="เพิ่มต้นทุนอื่นๆ">
+                  <Plus size={16} />
                 </button>
               </div>
-            ))}
-          </div>
+              {extraCosts.map((cost) => (
+                <div className="cost-row" key={cost.id}>
+                  <input
+                    value={cost.name}
+                    onChange={(event) =>
+                      setExtraCosts((current) =>
+                        current.map((item) => (item.id === cost.id ? { ...item, name: event.target.value } : item)),
+                      )
+                    }
+                  />
+                  <select
+                    value={cost.type}
+                    onChange={(event) =>
+                      setExtraCosts((current) =>
+                        current.map((item) =>
+                          item.id === cost.id ? { ...item, type: event.target.value as CostType } : item,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="perUnit">รายชิ้น</option>
+                    <option value="percentSale">% ยอดขาย</option>
+                    <option value="monthly">ต่อเดือน</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={cost.amount}
+                    onChange={(event) =>
+                      setExtraCosts((current) =>
+                        current.map((item) =>
+                          item.id === cost.id ? { ...item, amount: clamp(Number(event.target.value)) } : item,
+                        ),
+                      )
+                    }
+                  />
+                  <button className="icon-button danger-button" onClick={() => removeExtraCost(cost.id)} aria-label="ลบต้นทุนอื่นๆ">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
 
-          <LiveCostPreview
-            inputs={inputs}
-            extraCosts={extraCosts}
-          />
+            <LiveCostPreview
+              inputs={inputs}
+              extraCosts={extraCosts}
+            />
+          </div>
 
           <button className="analyze-wide" onClick={runAnalysis}>
             <Calculator size={18} />
