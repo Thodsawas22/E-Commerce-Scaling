@@ -673,14 +673,14 @@ export default function Home() {
           </div>
 
           <div className="input-section">
-            <h3 className="section-title">ต้นทุน</h3>
+            <h3 className="section-title">เงินทุน</h3>
             <div className="field-grid">
               <NumberField formatThousands unit="฿" label="ทุนเริ่มต้น" value={inputs.startingCapital} onChange={(value) => setInput("startingCapital", value)} />
             </div>
           </div>
 
           <div className="input-section">
-            <h3 className="section-title">ต้นทุน (ต่อ 1 ชิ้น)</h3>
+            <h3 className="section-title">ต้นทุนสินค้า (ต่อ 1 ชิ้น)</h3>
             <div className="field-grid">
               <NumberField unit="฿" label="ราคาสินค้า" value={inputs.productCost} onChange={(value) => setInput("productCost", value)} />
               <NumberField unit="฿" label="ขนส่ง/นำเข้า" value={inputs.inboundShippingCost} onChange={(value) => setInput("inboundShippingCost", value)} />
